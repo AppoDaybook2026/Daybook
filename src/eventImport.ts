@@ -11,36 +11,51 @@ export interface ImportedEvent {
   source: string
 }
 
-function normalizeDate(text: string) {
-  const iso = text.match(/\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.]([0-2]?\d|3[01])\b/)
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
-  const named = text.match(/\b(?:deadline|date|due)?\s*:?\s*((?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,)?\s+20\d{2})/i)
-  if (!named) return ''
-  const parsed = new Date(named[1].replace(/(st|nd|rd|th)/i, ''))
-  if (Number.isNaN(parsed.getTime())) return ''
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${parsed.getFullYear()}-${month}-${day}`
+const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
+
+async function extractWithGemini(text: string, source: string): Promise<ImportedEvent> {
+  if (!geminiApiKey) {
+    throw new Error('Gemini API key not configured')
+  }
+
+  const prompt = `Extract event/deadline information from this text and return ONLY valid JSON (no markdown, no extra text):
+{
+  "name": "event name or title",
+  "date": "YYYY-MM-DD format or empty string",
+  "location": "location/venue or empty string",
+  "category": "conference|training|publication",
+  "presentationFormat": "in-person|online|hybrid or empty string",
+  "fee": "cost or empty string"
 }
 
-export function inferEvent(text: string, source = ''): ImportedEvent {
-  const clean = text.replace(/\u0000/g, ' ').replace(/[ \t]+/g, ' ')
-  const lower = clean.toLowerCase()
-  const category: DeadlineCategory = /training|workshop|course|summer school|formation/.test(lower)
-    ? 'training'
-    : /journal|publication|abstract submission|full paper|call for papers/.test(lower)
-      ? 'publication'
-      : 'conference'
-  const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 4)
-  const name = lines.find((line) => line.length < 180 && !/^(date|deadline|location|venue|fee|format)\b/i.test(line)) ?? ''
-  const locationMatch = clean.match(/(?:location|venue|place)\s*[:\-]\s*([^\n|]{2,100})/i)
-  const feeMatch = clean.match(/(?:fee|registration|cost)\s*[:\-]?\s*((?:USD|EUR|MAD|€|\$|£)?\s?[\d,.]+(?:\s?(?:USD|EUR|MAD))?)/i)
-  const presentationFormat = /hybrid/i.test(clean) ? 'hybrid' : /online|virtual|zoom/i.test(clean) ? 'online' : /in.person|onsite|on-site/i.test(clean) ? 'in-person' : ''
+Text to analyze:
+${text}
+
+Return only the JSON object, nothing else.`
+
+  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + geminiApiKey, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+    }),
+  })
+
+  if (!response.ok) throw new Error(`Gemini error: ${response.status}`)
+
+  const data = await response.json()
+  const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const jsonMatch = textContent.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Could not parse Gemini response')
+
+  const extracted = JSON.parse(jsonMatch[0])
   return {
-    category, name, date: normalizeDate(clean),
-    location: locationMatch?.[1].trim() ?? '',
-    presentationFormat,
-    fee: feeMatch?.[1].trim() ?? '',
+    name: extracted.name ?? '',
+    date: extracted.date ?? '',
+    location: extracted.location ?? '',
+    category: (extracted.category ?? 'conference') as DeadlineCategory,
+    presentationFormat: extracted.presentationFormat ?? '',
+    fee: extracted.fee ?? '',
     source,
   }
 }
@@ -54,23 +69,17 @@ export async function extractPdf(file: File) {
   for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 12); pageNumber += 1) {
     const page = await document.getPage(pageNumber)
     const content = await page.getTextContent()
-    pages.push(content.items.map((item) => 'str' in item ? item.str : '').join(' '))
+    pages.push(content.items.map((item) => ('str' in item ? item.str : '')).join(' '))
   }
-  return inferEvent(pages.join('\n'), file.name)
+  return extractWithGemini(pages.join('\n'), file.name)
 }
-async function fetchEventPage(url: string) {
-  // Try multiple strategies to fetch the page:
-  // 1. Direct fetch (works if target allows CORS or is same-origin)
-  // 2. CORS proxy fallback (allorigins.win)
-  // 3. Our Cloudflare Pages Function proxy (as last resort)
 
-  // Strategy 1: Direct fetch
+async function fetchEventPage(url: string) {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
     if (response.ok) return response.text()
   } catch { /* fallback */ }
 
-  // Strategy 2: CORS proxy
   try {
     const proxied = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`)
     if (proxied.ok) {
@@ -78,12 +87,6 @@ async function fetchEventPage(url: string) {
       if (json.contents) return json.contents
     }
   } catch { /* fallback */ }
-
-  // Strategy 3: Our Pages Function proxy (if available)
-  try {
-    const proxied = await fetch(`/api/fetch-page?url=${encodeURIComponent(url)}`)
-    if (proxied.ok) return proxied.text()
-  } catch { /* all failed */ }
 
   throw new Error('Could not fetch page from any source. Try again or enter details manually.')
 }
@@ -93,5 +96,6 @@ export async function extractUrl(url: string) {
   const document = new DOMParser().parseFromString(html, 'text/html')
   document.querySelectorAll('script, style, nav, footer').forEach((node) => node.remove())
   const title = document.querySelector('meta[property="og:title"]')?.getAttribute('content') || document.title
-  return inferEvent(`${title}\n${document.body.textContent ?? ''}`, url)
+  const text = `${title}\n${document.body.textContent ?? ''}`
+  return extractWithGemini(text, url)
 }
