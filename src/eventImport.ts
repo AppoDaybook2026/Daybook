@@ -58,11 +58,38 @@ export async function extractPdf(file: File) {
   }
   return inferEvent(pages.join('\n'), file.name)
 }
+async function fetchEventPage(url: string) {
+  // Try multiple strategies to fetch the page:
+  // 1. Direct fetch (works if target allows CORS or is same-origin)
+  // 2. CORS proxy fallback (allorigins.win)
+  // 3. Our Cloudflare Pages Function proxy (as last resort)
+
+  // Strategy 1: Direct fetch
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
+    if (response.ok) return response.text()
+  } catch { /* fallback */ }
+
+  // Strategy 2: CORS proxy
+  try {
+    const proxied = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`)
+    if (proxied.ok) {
+      const json = await proxied.json()
+      if (json.contents) return json.contents
+    }
+  } catch { /* fallback */ }
+
+  // Strategy 3: Our Pages Function proxy (if available)
+  try {
+    const proxied = await fetch(`/api/fetch-page?url=${encodeURIComponent(url)}`)
+    if (proxied.ok) return proxied.text()
+  } catch { /* all failed */ }
+
+  throw new Error('Could not fetch page from any source. Try again or enter details manually.')
+}
 
 export async function extractUrl(url: string) {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`HTTP ${response.status}`)
-  const html = await response.text()
+  const html = await fetchEventPage(url)
   const document = new DOMParser().parseFromString(html, 'text/html')
   document.querySelectorAll('script, style, nav, footer').forEach((node) => node.remove())
   const title = document.querySelector('meta[property="og:title"]')?.getAttribute('content') || document.title
