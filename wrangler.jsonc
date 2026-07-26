@@ -11,7 +11,12 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    // "none" : un fichier absent répond 404, honnêtement. Le repli vers
+    // index.html est fait dans worker/index.ts, uniquement pour les vraies
+    // navigations. Avec "single-page-application", un asset manquant
+    // renvoyait index.html, ce qui produisait une erreur de type MIME
+    // incompréhensible au lieu d'un simple « fichier introuvable ».
+    "not_found_handling": "none"
   },
   "observability": {
     "enabled": true

@@ -427,6 +427,22 @@ export default {
       return json({ ok: true, geminiConfigured: Boolean(env.GEMINI_API_KEY) })
     }
 
-    return env.ASSETS.fetch(request)
+    // Toute autre adresse /api/... n'existe pas : on le dit, plutôt que de
+    // renvoyer l'application et de laisser croire à une réponse valide.
+    if (url.pathname.startsWith('/api/')) {
+      return json({ error: 'not-found' }, 404)
+    }
+
+    const response = await env.ASSETS.fetch(request)
+    if (response.status !== 404) return response
+
+    // Repli application monopage : réservé aux navigations. Un fichier absent
+    // (script, image, feuille de style) garde son 404, ce qui rend les erreurs
+    // de déploiement immédiatement lisibles.
+    const wantsHtml = request.headers.get('accept')?.includes('text/html')
+    if (request.method === 'GET' && wantsHtml) {
+      return env.ASSETS.fetch(new Request(new URL('/index.html', url), request))
+    }
+    return response
   },
 }
