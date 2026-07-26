@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addTask, db, deleteDeadline, addDeadline, localDate, prepareToday, queueChange, setTaskCompleted } from '../db'
+import { addTask, CLOSED_STATUSES, db, deleteDeadline, addDeadline, localDate, prepareToday, queueChange, setTaskCompleted, updateDeadline } from '../db'
 import { decryptLocal } from '../localCrypto'
 
 async function reset() {
@@ -61,7 +61,10 @@ describe('local store with sync outbox', () => {
   it('deleting a deadline queues a tombstone', async () => {
     await addDeadline({
       category: 'conference', kind: 'presentation-submission', name: 'ICIS 2026',
-      date: '2026-12-10', location: 'Lisbonne', presentationFormat: 'in-person', fee: '300 EUR', source: '',
+      date: '2026-12-10', eventDate: '2027-03-15', eventType: 'conference',
+      location: 'Lisbonne', presentationFormat: 'in-person', fee: '300 EUR',
+      organizer: 'Universite de Lisbonne', source: '',
+      status: 'interested', priority: 0,
     })
     const deadline = await db.deadlines.toCollection().first()
     expect(deadline?.name.startsWith('enc:v1:')).toBe(true)
@@ -70,5 +73,72 @@ describe('local store with sync outbox', () => {
     const queued = await db.outbox.toArray()
     expect(queued).toHaveLength(1)
     expect(queued[0]).toMatchObject({ collection: 'deadline', uuid: deadline!.uuid, op: 'delete' })
+  })
+})
+
+describe('suivi des candidatures (v9)', () => {
+  beforeEach(reset)
+
+  it('chiffre l organisateur et conserve les deux dates distinctes', async () => {
+    await addDeadline({
+      category: 'publication', kind: 'abstract-submission', name: 'Special issue on AI',
+      date: '2027-03-03', eventDate: '2027-09-12', eventType: 'journal',
+      location: 'Lisbonne', presentationFormat: 'hybrid', fee: 'EUR 300',
+      organizer: 'Universite de Lisbonne', source: 'https://example.org',
+      status: 'interested', priority: 0,
+    })
+
+    const row = await db.deadlines.toCollection().first()
+    expect(row?.date).toBe('2027-03-03')
+    expect(row?.eventDate).toBe('2027-09-12')
+    expect(row?.eventType).toBe('journal')
+    // Champ libre : chiffre au repos, comme le nom et le lieu.
+    expect(row?.organizer.startsWith('enc:v1:')).toBe(true)
+    await expect(decryptLocal(row!.organizer)).resolves.toBe('Universite de Lisbonne')
+    // Enums de suivi : lisibles localement, ils servent aux index et aux filtres.
+    expect(row?.status).toBe('interested')
+    expect(row?.priority).toBe(0)
+  })
+
+  it('applique des valeurs par defaut quand l extraction est incomplete', async () => {
+    await addDeadline({
+      category: 'training', kind: 'planned-participation', name: 'Summer school',
+      date: '2027-01-15', eventDate: '', eventType: undefined as never,
+      location: '', presentationFormat: '', fee: '', organizer: '', source: '',
+      status: undefined as never, priority: undefined as never,
+    })
+    const row = await db.deadlines.toCollection().first()
+    expect(row?.eventType).toBe('workshop')   // deduit de la categorie
+    expect(row?.status).toBe('interested')
+    expect(row?.priority).toBe(0)
+  })
+
+  it('met a jour statut et priorite et met la ligne en file de synchronisation', async () => {
+    await addDeadline({
+      category: 'conference', kind: 'presentation-submission', name: 'ICIS',
+      date: '2027-05-01', eventDate: '', eventType: 'conference',
+      location: '', presentationFormat: '', fee: '', organizer: '', source: '',
+      status: 'interested', priority: 0,
+    })
+    const row = await db.deadlines.toCollection().first()
+    await db.outbox.clear()
+
+    await updateDeadline(row!.id!, { status: 'submitted', priority: 4 })
+
+    const updated = await db.deadlines.get(row!.id!)
+    expect(updated?.status).toBe('submitted')
+    expect(updated?.priority).toBe(4)
+    expect(updated?.modifiedAt).not.toBe(row?.modifiedAt)
+
+    const queued = await db.outbox.toArray()
+    expect(queued).toHaveLength(1)
+    expect(queued[0]).toMatchObject({ collection: 'deadline', uuid: row!.uuid, op: 'upsert' })
+  })
+
+  it('les statuts clos sont bien identifies', () => {
+    expect(CLOSED_STATUSES).toContain('accepted')
+    expect(CLOSED_STATUSES).toContain('rejected')
+    expect(CLOSED_STATUSES).toContain('presented')
+    expect(CLOSED_STATUSES).not.toContain('submitted')
   })
 })

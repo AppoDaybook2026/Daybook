@@ -64,17 +64,48 @@ export interface Subactivity {
 
 export type DeadlineCategory = 'publication' | 'conference' | 'training'
 
+/** Nature de l'événement, indépendante de la catégorie de suivi. */
+export type EventType =
+  | 'conference' | 'workshop' | 'summer-school' | 'symposium'
+  | 'seminar' | 'congress' | 'journal' | 'other'
+
+export const EVENT_TYPES: EventType[] = [
+  'conference', 'workshop', 'summer-school', 'symposium',
+  'seminar', 'congress', 'journal', 'other',
+]
+
+/** Avancement de la candidature — la valeur ajoutée du suivi. */
+export type SubmissionStatus =
+  | 'interested' | 'planning' | 'drafting' | 'submitted'
+  | 'accepted' | 'rejected' | 'presented'
+
+export const SUBMISSION_STATUSES: SubmissionStatus[] = [
+  'interested', 'planning', 'drafting', 'submitted',
+  'accepted', 'rejected', 'presented',
+]
+
+/** Statuts qui ne demandent plus d'action : ils sortent du décompte à traiter. */
+export const CLOSED_STATUSES: SubmissionStatus[] = ['accepted', 'rejected', 'presented']
+
 export interface Deadline {
   id?: number
   uuid?: string
   category: DeadlineCategory
   kind: string
   name: string
+  /** Date limite à respecter (soumission, inscription…). */
   date: string
+  /** Date de l'événement lui-même, souvent postérieure à la date limite. */
+  eventDate: string
+  eventType: EventType
   location: string
   presentationFormat: string
   fee: string
+  organizer: string
   source: string
+  status: SubmissionStatus
+  /** 1 à 5. 0 signifie « non classé ». */
+  priority: number
   createdAt: string
   updatedAt: string
   modifiedAt?: string
@@ -207,7 +238,42 @@ class DaybookDatabase extends Dexie {
         })))
       }
     })
+
+    // v9 : suivi de candidature. Migration purement additive — aucune donnée
+    // existante n'est réécrite, seules des valeurs par défaut sont ajoutées.
+    this.version(9).stores({
+      tasks: '++id, &uuid, createdOn, createdAt',
+      dailyTasks: '++id, &uuid, &[taskId+date], date, completed, priority, position',
+      timeSessions: '++id, &uuid, taskId, startedAt, endedAt',
+      milestones: '++id, &uuid, position, status, updatedAt',
+      subactivities: '++id, &uuid, milestoneId, completed, position',
+      deadlines: '++id, &uuid, category, date, eventDate, status, priority, updatedAt',
+      appMeta: '&key',
+      outbox: '++id, [collection+uuid], queuedAt',
+      pendingRows: '++id, &[collection+uuid], receivedAt',
+    }).upgrade(async (transaction) => {
+      const rows = await transaction.table('deadlines').toArray()
+      const emptyEncrypted = await encryptLocal('')
+      await Promise.all(rows.map((row: Partial<Deadline> & { id: number }) =>
+        transaction.table('deadlines').update(row.id, {
+          // La date de l'événement était confondue avec la date limite :
+          // on reprend celle-ci comme point de départ, l'utilisateur affinera.
+          eventDate: row.eventDate ?? row.date ?? '',
+          eventType: row.eventType ?? defaultEventType(row.category),
+          organizer: row.organizer ?? emptyEncrypted,
+          status: row.status ?? 'interested',
+          priority: row.priority ?? 0,
+          modifiedAt: new Date().toISOString(),
+        })))
+    })
   }
+}
+
+/** Type d'événement le plus plausible pour une catégorie donnée. */
+function defaultEventType(category?: DeadlineCategory): EventType {
+  if (category === 'publication') return 'journal'
+  if (category === 'training') return 'workshop'
+  return 'conference'
 }
 
 export const db = new DaybookDatabase()
@@ -605,7 +671,12 @@ export async function addDeadline(deadline: Omit<Deadline, 'id' | 'createdAt' | 
     location: await encryptLocal(deadline.location),
     presentationFormat: await encryptLocal(deadline.presentationFormat),
     fee: await encryptLocal(deadline.fee),
+    organizer: await encryptLocal(deadline.organizer ?? ''),
     source: await encryptLocal(deadline.source),
+    eventDate: deadline.eventDate ?? '',
+    eventType: deadline.eventType ?? defaultEventType(deadline.category),
+    status: deadline.status ?? 'interested',
+    priority: deadline.priority ?? 0,
     createdAt: timestamp,
     updatedAt: timestamp,
     uuid,
@@ -623,6 +694,7 @@ export async function updateDeadline(id: number, changes: Partial<Omit<Deadline,
   if (changes.location !== undefined) secure.location = await encryptLocal(changes.location)
   if (changes.presentationFormat !== undefined) secure.presentationFormat = await encryptLocal(changes.presentationFormat)
   if (changes.fee !== undefined) secure.fee = await encryptLocal(changes.fee)
+  if (changes.organizer !== undefined) secure.organizer = await encryptLocal(changes.organizer)
   if (changes.source !== undefined) secure.source = await encryptLocal(changes.source)
   const timestamp = new Date().toISOString()
   await db.transaction('rw', db.deadlines, db.outbox, async () => {

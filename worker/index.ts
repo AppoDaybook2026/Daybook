@@ -26,11 +26,16 @@ interface ExtractRequest {
 
 interface ExtractedEvent {
   category: 'conference' | 'training' | 'publication'
+  eventType: string
   name: string
+  /** Date limite à respecter. */
   date: string
+  /** Date de l'événement lui-même. */
+  eventDate: string
   location: string
   presentationFormat: string
   fee: string
+  organizer: string
   source: string
 }
 
@@ -146,21 +151,29 @@ const PROMPT_HEADER = `You extract structured data about an academic or professi
 
 Return ONLY a JSON object, no markdown fences, no commentary, with exactly these keys:
 {
-  "name": "the event or position title, concise",
-  "date": "the single most important upcoming deadline or event date, strict YYYY-MM-DD, or \\"\\" if none is stated",
+  "name": "the event or position title, concise, without the organiser name",
+  "date": "the DEADLINE the reader must act on, strict YYYY-MM-DD, or \\"\\"",
+  "eventDate": "the date the EVENT ITSELF starts, strict YYYY-MM-DD, or \\"\\"",
   "location": "city and/or country, or the institution, or \\"\\"",
   "category": "one of: conference, training, publication",
+  "eventType": "one of: conference, workshop, summer-school, symposium, seminar, congress, journal, other",
   "presentationFormat": "one of: in-person, online, hybrid, or \\"\\"",
-  "fee": "registration fee or salary as written, or \\"\\""
+  "fee": "registration fee or salary as written, or \\"\\"",
+  "organizer": "university, laboratory, learned society or publisher behind the call, or \\"\\""
 }
 
 Rules:
-- Prefer a submission/application deadline over the event date itself.
-- If several dates appear, choose the one the reader must act on.
+- "date" and "eventDate" are different things and must not be confused. A call
+  for papers closing on 3 March for a conference held in September has
+  date=2027-03-03 and eventDate=2027-09-xx.
+- If only one date exists, decide which it is from context and leave the other "".
+- If several deadlines appear (abstract, full paper, registration), choose the
+  earliest one still meaningful to the reader.
 - Never invent information. Use "" when the text does not state it.
-- category: use "publication" for calls for papers and journal special issues,
-  "training" for courses, schools and workshops, "conference" otherwise
-  (including PhD and job vacancies).
+- category groups how the user tracks it: "publication" for calls for papers and
+  journal special issues, "training" for courses and schools, "conference"
+  otherwise (including PhD and job vacancies).
+- eventType describes the nature of the event itself, independently of category.
 
 Page text:
 `
@@ -300,23 +313,39 @@ const MONTHS: Record<string, string> = {
   jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
 }
 
-function heuristicExtract(text: string): Partial<ExtractedEvent> {
-  const iso = text.match(/\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.]([0-2]?\d|3[01])\b/)
-  let date = ''
-  if (iso) {
-    date = `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
-  } else {
-    const named = text.match(
-      /\b([0-3]?\d)\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(20\d{2})\b/i,
-    )
-    const named2 = text.match(
-      /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+([0-3]?\d)(?:st|nd|rd|th)?,?\s+(20\d{2})\b/i,
-    )
-    if (named) date = `${named[3]}-${MONTHS[named[2].toLowerCase().slice(0, 3)]}-${named[1].padStart(2, '0')}`
-    else if (named2) date = `${named2[3]}-${MONTHS[named2[1].toLowerCase().slice(0, 3)]}-${named2[2].padStart(2, '0')}`
+/** Toutes les dates du texte, normalisées et triées chronologiquement. */
+function collectDates(text: string): string[] {
+  const found = new Set<string>()
+
+  for (const m of text.matchAll(/\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.]([0-2]?\d|3[01])\b/g)) {
+    found.add(`${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`)
   }
+  for (const m of text.matchAll(/\b([0-3]?\d)\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(20\d{2})\b/gi)) {
+    found.add(`${m[3]}-${MONTHS[m[2].toLowerCase().slice(0, 3)]}-${m[1].padStart(2, '0')}`)
+  }
+  for (const m of text.matchAll(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+([0-3]?\d)(?:st|nd|rd|th)?,?\s+(20\d{2})\b/gi)) {
+    found.add(`${m[3]}-${MONTHS[m[1].toLowerCase().slice(0, 3)]}-${m[2].padStart(2, '0')}`)
+  }
+  return [...found].sort()
+}
+
+function heuristicExtract(text: string): Partial<ExtractedEvent> {
+  // Sans modèle, on ne peut que supposer : la première date est la limite,
+  // la dernière l'événement. C'est une approximation assumée.
+  const dates = collectDates(text)
+  const date = dates[0] ?? ''
+  const eventDate = dates.length > 1 ? dates[dates.length - 1] : ''
 
   const lower = text.toLowerCase()
+  const eventType =
+    /\bsummer school\b|\bwinter school\b/.test(lower) ? 'summer-school'
+      : /\bworkshop\b/.test(lower) ? 'workshop'
+        : /\bsymposium\b/.test(lower) ? 'symposium'
+          : /\bcongress\b/.test(lower) ? 'congress'
+            : /\bseminar\b/.test(lower) ? 'seminar'
+              : /\bjournal\b|\bspecial issue\b/.test(lower) ? 'journal'
+                : /\bconference\b/.test(lower) ? 'conference'
+                  : 'other'
   // Limites de mots obligatoires : sans elles, « information » contient
   // « formation » et « discourse » contient « course ».
   const category: ExtractedEvent['category'] =
@@ -331,6 +360,9 @@ function heuristicExtract(text: string): Partial<ExtractedEvent> {
   return {
     name: firstLine ?? '',
     date,
+    eventDate,
+    eventType,
+    organizer: text.match(/(?:organi[sz]ed by|organiser|organizer|host(?:ed by)?|institution)\s*[:\-]?\s*([^\n|]{3,90})/i)?.[1]?.trim() ?? '',
     location: text.match(/(?:location|venue|place|city)\s*[:\-]\s*([^\n|]{2,80})/i)?.[1]?.trim() ?? '',
     category,
     presentationFormat: /hybrid/i.test(text)
@@ -350,6 +382,11 @@ function heuristicExtract(text: string): Partial<ExtractedEvent> {
 
 const CATEGORIES = new Set(['conference', 'training', 'publication'])
 const FORMATS = new Set(['in-person', 'online', 'hybrid'])
+const EVENT_TYPES = new Set([
+  'conference', 'workshop', 'summer-school', 'symposium',
+  'seminar', 'congress', 'journal', 'other',
+])
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -395,14 +432,24 @@ async function handleExtract(request: Request, env: Env): Promise<Response> {
 
   const category = String(result.category ?? '').toLowerCase()
   const format = String(result.presentationFormat ?? '').toLowerCase()
+  const eventType = String(result.eventType ?? '').toLowerCase()
+  const date = String(result.date ?? '')
+  let eventDate = String(result.eventDate ?? '')
+
+  // Un événement ne peut pas précéder sa propre date limite : si le modèle a
+  // inversé les deux, on écarte la valeur douteuse plutôt que de l'afficher.
+  if (ISO_DATE.test(date) && ISO_DATE.test(eventDate) && eventDate < date) eventDate = ''
 
   const event: ExtractedEvent = {
     name: String(result.name ?? '').trim().slice(0, 300),
-    date: /^\d{4}-\d{2}-\d{2}$/.test(String(result.date ?? '')) ? String(result.date) : '',
+    date: ISO_DATE.test(date) ? date : '',
+    eventDate: ISO_DATE.test(eventDate) ? eventDate : '',
     location: String(result.location ?? '').trim().slice(0, 200),
     category: (CATEGORIES.has(category) ? category : 'conference') as ExtractedEvent['category'],
+    eventType: EVENT_TYPES.has(eventType) ? eventType : 'other',
     presentationFormat: FORMATS.has(format) ? format : '',
     fee: String(result.fee ?? '').trim().slice(0, 100),
+    organizer: String(result.organizer ?? '').trim().slice(0, 200),
     source,
   }
 

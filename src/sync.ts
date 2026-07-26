@@ -100,10 +100,13 @@ async function serializeRow(collection: SyncedCollection, uuid: string): Promise
       if (!row) return undefined
       return {
         uuid, category: row.category, kind: row.kind, date: row.date,
+        eventDate: row.eventDate, eventType: row.eventType,
+        status: row.status, priority: row.priority,
         createdAt: row.createdAt, updatedAt: row.updatedAt, modifiedAt: row.modifiedAt,
         name: await decryptLocal(row.name), location: await decryptLocal(row.location),
         presentationFormat: await decryptLocal(row.presentationFormat),
-        fee: await decryptLocal(row.fee), source: await decryptLocal(row.source),
+        fee: await decryptLocal(row.fee), organizer: await decryptLocal(row.organizer),
+        source: await decryptLocal(row.source),
       }
     }
     case 'appMeta': {
@@ -363,10 +366,17 @@ async function upsertLocalRow(collection: SyncedCollection, plain: PulledPayload
         category: (plain.category as Deadline['category']) ?? 'conference',
         kind: String(plain.kind ?? ''),
         date: String(plain.date ?? ''),
+        // Champs ajoutes en v9 : un appareil encore en v8 ne les envoie pas,
+        // d'ou les valeurs de repli.
+        eventDate: String(plain.eventDate ?? plain.date ?? ''),
+        eventType: (plain.eventType as Deadline['eventType']) ?? 'conference',
+        status: (plain.status as Deadline['status']) ?? 'interested',
+        priority: Number(plain.priority ?? 0),
         name: await encryptLocal(String(plain.name ?? '')),
         location: await encryptLocal(String(plain.location ?? '')),
         presentationFormat: await encryptLocal(String(plain.presentationFormat ?? '')),
         fee: await encryptLocal(String(plain.fee ?? '')),
+        organizer: await encryptLocal(String(plain.organizer ?? '')),
         source: await encryptLocal(String(plain.source ?? '')),
         createdAt: String(plain.createdAt ?? new Date().toISOString()),
         updatedAt: String(plain.updatedAt ?? new Date().toISOString()),

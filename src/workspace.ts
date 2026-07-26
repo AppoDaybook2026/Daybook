@@ -117,7 +117,7 @@ export async function exportEncryptedBackup(password: string): Promise<Blob> {
       delete copy.milestoneId
       return copy
     }), ['title']),
-    deadlines: await decryptedRows(await db.deadlines.toArray() as unknown as Record<string, unknown>[], ['name', 'location', 'presentationFormat', 'fee', 'source']),
+    deadlines: await decryptedRows(await db.deadlines.toArray() as unknown as Record<string, unknown>[], ['name', 'location', 'presentationFormat', 'fee', 'organizer', 'source']),
   }
   const envelope = await encryptJsonWithPassword(data, password)
   return new Blob([JSON.stringify(envelope)], { type: 'application/json' })
@@ -160,7 +160,13 @@ export async function restoreEncryptedBackup(fileContent: string, password: stri
     location: await encryptLocal(String(row.location ?? '')),
     presentationFormat: await encryptLocal(String(row.presentationFormat ?? '')),
     fee: await encryptLocal(String(row.fee ?? '')),
+    organizer: await encryptLocal(String(row.organizer ?? '')),
     source: await encryptLocal(String(row.source ?? '')),
+    // Sauvegardes anterieures a la v9 : valeurs par defaut.
+    eventDate: String(row.eventDate ?? row.date ?? ''),
+    eventType: row.eventType ?? 'conference',
+    status: row.status ?? 'interested',
+    priority: Number(row.priority ?? 0),
   })))
 
   await db.transaction('rw', [db.tasks, db.dailyTasks, db.timeSessions, db.milestones, db.subactivities, db.deadlines, db.outbox, db.pendingRows], async () => {

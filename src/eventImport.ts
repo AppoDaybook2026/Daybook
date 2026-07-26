@@ -3,11 +3,17 @@ import type { DeadlineCategory } from './db'
 
 export interface ImportedEvent {
   category: DeadlineCategory
+  /** Nature de l'événement (conference, workshop, summer-school…). */
+  eventType: string
   name: string
+  /** Date limite à respecter. */
   date: string
+  /** Date de l'événement lui-même. */
+  eventDate: string
   location: string
   presentationFormat: string
   fee: string
+  organizer: string
   source: string
 }
 
