@@ -135,10 +135,9 @@ async function fetchPageText(target: URL): Promise<string> {
 // Les noms de modèles évoluent ; on essaie du plus récent au plus ancien et
 // on passe au suivant si l'API répond 404 (modèle inconnu).
 const GEMINI_MODELS = [
+  'gemini-3.5-flash',
   'gemini-2.5-flash',
   'gemini-2.0-flash',
-  'gemini-flash-latest',
-  'gemini-1.5-flash',
 ]
 
 const PROMPT_HEADER = `You extract structured data about an academic or professional event (conference, call for papers, training, job/PhD vacancy, scholarship) from raw page text.
@@ -164,41 +163,90 @@ Rules:
 Page text:
 `
 
+/**
+ * Extrait le texte de la réponse, quelle que soit la forme renvoyée :
+ * Interactions API (output_text ou steps[].modelOutput) ou l'ancienne
+ * generateContent (candidates[].content.parts).
+ */
+function readModelText(data: unknown): string {
+  const root = data as {
+    output_text?: string
+    outputText?: string
+    steps?: { modelOutput?: { content?: { text?: { text?: string } | string }[] } }[]
+    candidates?: { content?: { parts?: { text?: string }[] } }[]
+  }
+
+  if (typeof root.output_text === 'string' && root.output_text) return root.output_text
+  if (typeof root.outputText === 'string' && root.outputText) return root.outputText
+
+  const pieces: string[] = []
+  for (const step of root.steps ?? []) {
+    for (const content of step.modelOutput?.content ?? []) {
+      if (typeof content.text === 'string') pieces.push(content.text)
+      else if (content.text?.text) pieces.push(content.text.text)
+    }
+  }
+  if (pieces.length) return pieces.join('\n')
+
+  for (const candidate of root.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      if (part.text) pieces.push(part.text)
+    }
+  }
+  return pieces.join('\n')
+}
+
+async function askModel(apiKey: string, model: string, prompt: string): Promise<Response | null> {
+  const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }
+
+  // Point d'entrée actuel : Interactions API.
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model, input: prompt }),
+      signal: AbortSignal.timeout(25_000),
+    })
+    if (response.ok || (response.status !== 404 && response.status !== 400)) return response
+  } catch {
+    return null
+  }
+
+  // Repli : ancien point d'entrée generateContent.
+  try {
+    return await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(25_000),
+      },
+    )
+  } catch {
+    return null
+  }
+}
+
 async function callGemini(apiKey: string, text: string): Promise<Partial<ExtractedEvent> | null> {
-  const payload = JSON.stringify({
-    contents: [{ parts: [{ text: PROMPT_HEADER + text }] }],
-    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-  })
+  const prompt = PROMPT_HEADER + text
 
   for (const model of GEMINI_MODELS) {
-    let response: Response
-    try {
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-          body: payload,
-          signal: AbortSignal.timeout(25_000),
-        },
-      )
-    } catch {
-      continue
-    }
-
-    if (response.status === 404) continue // modèle inconnu : on essaie le suivant
+    const response = await askModel(apiKey, model, prompt)
+    if (!response) continue
+    if (response.status === 404 || response.status === 400) continue // modèle inconnu
     if (!response.ok) return null
 
-    const data = (await response.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[]
-    }
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    const raw = readModelText(await response.json())
     const match = raw.match(/\{[\s\S]*\}/)
-    if (!match) return null
+    if (!match) continue
     try {
       return JSON.parse(match[0]) as Partial<ExtractedEvent>
     } catch {
-      return null
+      continue
     }
   }
   return null
@@ -230,11 +278,13 @@ function heuristicExtract(text: string): Partial<ExtractedEvent> {
   }
 
   const lower = text.toLowerCase()
+  // Limites de mots obligatoires : sans elles, « information » contient
+  // « formation » et « discourse » contient « course ».
   const category: ExtractedEvent['category'] =
-    /training|workshop|summer school|winter school|course|formation/.test(lower)
-      ? 'training'
-      : /call for papers|special issue|journal|abstract submission|full paper/.test(lower)
-        ? 'publication'
+    /\b(call for papers|special issue|abstract submission|full paper|journal)\b/.test(lower)
+      ? 'publication'
+      : /\b(training|workshop|summer school|winter school|course|formation)\b/.test(lower)
+        ? 'training'
         : 'conference'
 
   const firstLine = text.split('\n').map((line) => line.trim()).find((line) => line.length > 8 && line.length < 200)
