@@ -19,6 +19,8 @@ interface Env {
 interface ExtractRequest {
   url?: string
   text?: string
+  /** PDF encodé en base64, quand la lecture locale n'a pas abouti. */
+  pdfBase64?: string
   source?: string
 }
 
@@ -231,23 +233,60 @@ async function askModel(apiKey: string, model: string, prompt: string): Promise<
   }
 }
 
-async function callGemini(apiKey: string, text: string): Promise<Partial<ExtractedEvent> | null> {
-  const prompt = PROMPT_HEADER + text
+/**
+ * Lecture du PDF par Gemini lui-même (vision native) : fonctionne aussi sur
+ * les PDF scannés, qui ne contiennent aucun texte sélectionnable.
+ */
+async function askModelWithPdf(apiKey: string, model: string, pdfBase64: string): Promise<Response | null> {
+  try {
+    return await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
+              // La consigne se place après le document (recommandation Google).
+              { text: PROMPT_HEADER + '(see the attached PDF)' },
+            ],
+          }],
+          generationConfig: { temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(40_000),
+      },
+    )
+  } catch {
+    return null
+  }
+}
 
+function parseModelJson(raw: string): Partial<ExtractedEvent> | null {
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    return JSON.parse(match[0]) as Partial<ExtractedEvent>
+  } catch {
+    return null
+  }
+}
+
+async function callGemini(
+  apiKey: string,
+  input: { text?: string; pdfBase64?: string },
+): Promise<Partial<ExtractedEvent> | null> {
   for (const model of GEMINI_MODELS) {
-    const response = await askModel(apiKey, model, prompt)
+    const response = input.pdfBase64
+      ? await askModelWithPdf(apiKey, model, input.pdfBase64)
+      : await askModel(apiKey, model, PROMPT_HEADER + (input.text ?? ''))
+
     if (!response) continue
     if (response.status === 404 || response.status === 400) continue // modèle inconnu
     if (!response.ok) return null
 
-    const raw = readModelText(await response.json())
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (!match) continue
-    try {
-      return JSON.parse(match[0]) as Partial<ExtractedEvent>
-    } catch {
-      continue
-    }
+    const parsed = parseModelJson(readModelText(await response.json()))
+    if (parsed) return parsed
   }
   return null
 }
@@ -328,9 +367,10 @@ async function handleExtract(request: Request, env: Env): Promise<Response> {
   }
 
   const source = payload.source ?? payload.url ?? ''
+  const pdfBase64 = payload.pdfBase64
   let text = (payload.text ?? '').trim()
 
-  if (!text && payload.url) {
+  if (!text && !pdfBase64 && payload.url) {
     const target = validateTarget(payload.url)
     if (!target) return json({ error: 'invalid-url' }, 400)
     try {
@@ -340,11 +380,17 @@ async function handleExtract(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  if (!text) return json({ error: 'empty-content' }, 400)
+  if (!text && !pdfBase64) return json({ error: 'empty-content' }, 400)
   text = text.slice(0, MAX_TEXT)
 
   const key = env.GEMINI_API_KEY
-  const fromModel = key ? await callGemini(key, text) : null
+  if (pdfBase64 && !key) {
+    // Sans clé, on ne sait pas lire un PDF côté serveur : on le dit clairement.
+    return json({ error: 'pdf-needs-gemini' }, 503)
+  }
+
+  const fromModel = key ? await callGemini(key, { text, pdfBase64 }) : null
+  if (!fromModel && pdfBase64) return json({ error: 'pdf-unreadable' }, 502)
   const result = fromModel ?? heuristicExtract(text)
 
   const category = String(result.category ?? '').toLowerCase()

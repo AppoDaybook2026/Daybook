@@ -55,6 +55,20 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     setImportMessage(t('reviewImport'))
   }
 
+  // Messages explicites : sans eux, un échec est indiscernable d'un autre.
+  function explain(error: unknown, fallback: string) {
+    const code = error instanceof Error ? error.message : ''
+    const known: Record<string, string> = {
+      'pdf-too-large': 'This PDF is too large (limit 15 MB). Try a smaller file.',
+      'pdf-needs-gemini': 'PDF reading is unavailable right now (extraction service not configured).',
+      'pdf-unreadable': 'The content of this PDF could not be interpreted. Please enter the information below.',
+      'invalid-url': 'This address is not valid.',
+      'fetch-failed': 'This page could not be reached. It may require a login.',
+      'empty-content': 'No readable content was found.',
+    }
+    return known[code] ?? `${fallback}${code ? ` (${code})` : ''}`
+  }
+
   async function importFromUrl(event: FormEvent) {
     event.preventDefault()
     if (!url.trim()) return
@@ -62,8 +76,8 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     setImportMessage('')
     try {
       applyImport(await extractUrl(url.trim()))
-    } catch {
-      setImportMessage('This page could not be read automatically. You can still enter its information below.')
+    } catch (error) {
+      setImportMessage(explain(error, 'This page could not be read automatically. You can still enter its information below.'))
     } finally {
       setExtracting(false)
     }
@@ -75,8 +89,8 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     setImportMessage('')
     try {
       applyImport(await extractPdf(file))
-    } catch {
-      setImportMessage('The PDF could not be read. Please enter the information below.')
+    } catch (error) {
+      setImportMessage(explain(error, 'The PDF could not be read. Please enter the information below.'))
     } finally {
       setExtracting(false)
     }
