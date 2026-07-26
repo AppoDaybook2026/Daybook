@@ -1,0 +1,19 @@
+{
+  // Daybook — Cloudflare Worker qui sert l'application ET expose /api/*.
+  //
+  // Sans ce fichier, le déploiement ne contient que des fichiers statiques :
+  // aucune route serveur n'existe, et tout appel POST /api/... répond 405.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "daybook",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-07-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
