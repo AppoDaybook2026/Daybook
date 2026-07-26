@@ -407,7 +407,7 @@ h1 { margin: 0; color: #17392b; font-size: clamp(27px, 5vw, 38px); font-weight: 
 .col-type { width: 130px; }
 .col-date { width: 150px; white-space: nowrap; }
 .col-status { width: 160px; }
-.col-actions { width: 52px; text-align: end; }
+.col-actions { width: 92px; text-align: end; white-space: nowrap; }
 .date-value { display: block; color: #41594d; font-variant-numeric: tabular-nums; }
 .type-chip { display: inline-block; padding: 3px 9px; border-radius: 20px; background: #eef4f1; color: #55705f; font-size: 13px; font-weight: 650; }
 
@@ -463,3 +463,8 @@ h1 { margin: 0; color: #17392b; font-size: clamp(27px, 5vw, 38px); font-weight: 
   grid-template-columns: none;
 }
 .event-table .event-row > td { display: table-cell; }
+
+/* Bouton de correction, à côté de la suppression. */
+.edit-button { display: inline-grid; width: 32px; height: 32px; border: 0; border-radius: 5px; background: transparent; color: #b6c3bc; place-items: center; vertical-align: middle; }
+.edit-button:hover { background: var(--accent-soft); color: var(--accent-dark); }
+.event-table .delete-button { display: inline-grid; vertical-align: middle; }

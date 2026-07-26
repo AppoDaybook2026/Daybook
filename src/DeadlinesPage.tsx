@@ -1,7 +1,7 @@
 import { liveQuery } from 'dexie'
 import {
   Bell, CalendarDays, ChevronDown, ChevronUp, ExternalLink, FileUp, Loader2,
-  Plus, RotateCcw, Star, Trash2,
+  Pencil, Plus, RotateCcw, Star, Trash2,
 } from 'lucide-react'
 import { Fragment, type FormEvent, useEffect, useMemo, useState } from 'react'
 import {
@@ -77,6 +77,8 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
   const [extracting, setExtracting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  /** null = création d'un nouvel événement ; sinon, identifiant en cours d'édition. */
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [notificationPermission, setNotificationPermission] = useState(() => typeof Notification === 'undefined' ? 'denied' : Notification.permission)
 
@@ -140,7 +142,36 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     setDraft(result)
     setKind(result.category === 'publication' ? 'abstract-submission' : result.category === 'conference' ? 'presentation-submission' : 'planned-participation')
     setImportMessage(t('reviewImport'))
+    // Une extraction crée toujours un nouvel événement, jamais une modification.
+    setEditingId(null)
     setFormOpen(true)
+  }
+
+  /** Recharge un événement enregistré dans le formulaire pour correction. */
+  function startEdit(event: Deadline) {
+    setDraft({
+      category: event.category,
+      eventType: event.eventType,
+      name: event.name,
+      date: event.date,
+      eventDate: event.eventDate ?? '',
+      location: event.location,
+      presentationFormat: event.presentationFormat,
+      fee: event.fee,
+      organizer: event.organizer ?? '',
+      source: event.source,
+    })
+    setKind(event.kind)
+    setEditingId(event.id!)
+    setImportMessage('')
+    setFormOpen(true)
+  }
+
+  function closeForm() {
+    setFormOpen(false)
+    setEditingId(null)
+    setImportMessage('')
+    setDraft(emptyDraft(draft.category))
   }
 
   // Messages explicites : sans eux, un échec est indiscernable d'un autre.
@@ -188,17 +219,27 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
   async function save(event: FormEvent) {
     event.preventDefault()
     if (!draft.name.trim() || !draft.date) return
-    await addDeadline({
-      ...draft,
-      category: draft.category,
-      eventType: draft.eventType as EventType,
-      kind,
-      status: 'interested',
-      priority: 0,
-    })
-    setDraft(emptyDraft(draft.category))
-    setImportMessage('')
-    setFormOpen(false)
+
+    if (editingId !== null) {
+      // Correction d'un événement existant : statut et priorité ne sont pas
+      // dans le formulaire, ils se règlent dans le tableau et sont préservés.
+      await updateDeadline(editingId, {
+        ...draft,
+        category: draft.category,
+        eventType: draft.eventType as EventType,
+        kind,
+      })
+    } else {
+      await addDeadline({
+        ...draft,
+        category: draft.category,
+        eventType: draft.eventType as EventType,
+        kind,
+        status: 'interested',
+        priority: 0,
+      })
+    }
+    closeForm()
   }
 
   async function enableNotifications() {
@@ -268,14 +309,14 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
           {[1, 2, 3, 4, 5].map((level) => <option key={level} value={level}>{'★'.repeat(level)}</option>)}
         </select>
         <button className="reset-filters" onClick={resetFilters} type="button"><RotateCcw size={14} /> {t('resetFilters')}</button>
-        <button className="add-event-button" onClick={() => setFormOpen((open) => !open)} type="button">
-          <Plus size={15} /> {t('saveEvent')}
+        <button className="add-event-button" onClick={() => formOpen ? closeForm() : setFormOpen(true)} type="button">
+          <Plus size={15} /> {t('addEventTitle')}
         </button>
       </div>
 
       {formOpen && (
         <form className="event-form" onSubmit={save}>
-          <h2>{t('addEventTitle')}</h2>
+          <h2>{editingId !== null ? `${t('edit')} — ${draft.name || t('eventName')}` : t('addEventTitle')}</h2>
           <div className="event-form-grid">
             <label className="span-2"><span>{t('eventName')}</span>
               <input onChange={(event) => setDraft({ ...draft, name: event.target.value })} required value={draft.name} />
@@ -327,8 +368,10 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
             </label>
           </div>
           <div className="event-form-actions">
-            <button className="secondary" onClick={() => { setFormOpen(false); setImportMessage('') }} type="button">{t('cancel')}</button>
-            <button className="save-event-button" disabled={!draft.name.trim() || !draft.date} type="submit"><Plus size={16} /> {t('saveEvent')}</button>
+            <button className="secondary" onClick={closeForm} type="button">{t('cancel')}</button>
+            <button className="save-event-button" disabled={!draft.name.trim() || !draft.date} type="submit">
+              {editingId !== null ? <Pencil size={16} /> : <Plus size={16} />} {t('saveEvent')}
+            </button>
           </div>
         </form>
       )}
@@ -376,7 +419,8 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
                       </select>
                     </td>
                     <td className="col-actions">
-                      <button aria-label={t('delete')} className="delete-button" onClick={() => void deleteDeadline(event.id!)} type="button"><Trash2 size={15} /></button>
+                      <button aria-label={t('edit')} className="edit-button" onClick={() => startEdit(event)} title={t('edit')} type="button"><Pencil size={15} /></button>
+                      <button aria-label={t('delete')} className="delete-button" onClick={() => void deleteDeadline(event.id!)} title={t('delete')} type="button"><Trash2 size={15} /></button>
                     </td>
                   </tr>
                   {expanded === event.id && (
