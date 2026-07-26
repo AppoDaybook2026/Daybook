@@ -60,6 +60,7 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     const code = error instanceof Error ? error.message : ''
     const known: Record<string, string> = {
       'pdf-too-large': 'This PDF is too large (limit 15 MB). Try a smaller file.',
+      'pdf-empty-file': 'This file appears to be empty.',
       'pdf-needs-gemini': 'PDF reading is unavailable right now (extraction service not configured).',
       'pdf-unreadable': 'The content of this PDF could not be interpreted. Please enter the information below.',
       'invalid-url': 'This address is not valid.',

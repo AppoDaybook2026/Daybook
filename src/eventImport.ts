@@ -13,7 +13,9 @@ export interface ImportedEvent {
 
 /** Gemini accepte 50 Mo ; on reste bien en deçà pour la bande passante. */
 const MAX_PDF_BYTES = 15_000_000
-/** En dessous, on considère que le PDF est scanné (pas de texte exploitable). */
+/** Au-delà, on privilégie l'extraction locale du texte pour éviter un gros envoi. */
+const NATIVE_PDF_LIMIT = 8_000_000
+/** En dessous, on considère le texte extrait localement comme inexploitable. */
 const MIN_USEFUL_TEXT = 200
 
 /**
@@ -50,7 +52,10 @@ async function readPdfTextLocally(bytes: Uint8Array): Promise<string> {
   try {
     const pdfjs = await import('pdfjs-dist')
     pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
-    const document = await pdfjs.getDocument({ data: bytes }).promise
+    // ATTENTION : pdf.js transfère le tableau à son sous-processus, ce qui vide
+    // l'original (longueur ramenée à 0). On lui donne donc une copie, sinon le
+    // repli « envoyer le PDF au serveur » expédierait un fichier vide.
+    const document = await pdfjs.getDocument({ data: bytes.slice() }).promise
 
     const pages: string[] = []
     for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 12); pageNumber += 1) {
@@ -69,15 +74,23 @@ export async function extractPdf(file: File): Promise<ImportedEvent> {
   if (file.size > MAX_PDF_BYTES) throw new Error('pdf-too-large')
 
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const localText = await readPdfTextLocally(bytes)
+  if (bytes.length === 0) throw new Error('pdf-empty-file')
 
-  // Chemin rapide : le PDF contient du texte, rien d'autre que ce texte ne part.
-  if (localText.length >= MIN_USEFUL_TEXT) {
-    return askServer({ text: localText, source: file.name })
+  // Chemin principal : Gemini lit le PDF tel quel, avec sa mise en page, ses
+  // tableaux et ses en-têtes. Nettement plus fiable qu'un texte aplati, et
+  // fonctionne aussi sur les documents scannés.
+  if (file.size <= NATIVE_PDF_LIMIT) {
+    try {
+      return await askServer({ pdfBase64: toBase64(bytes), source: file.name })
+    } catch {
+      // On tente la lecture locale ci-dessous avant d'abandonner.
+    }
   }
 
-  // Repli : PDF scanné ou lecture locale impossible — Gemini le lit lui-même.
-  return askServer({ pdfBase64: toBase64(bytes), source: file.name })
+  // Secours : extraction du texte dans le navigateur.
+  const localText = await readPdfTextLocally(bytes)
+  if (localText.length < MIN_USEFUL_TEXT) throw new Error('pdf-unreadable')
+  return askServer({ text: localText, source: file.name })
 }
 
 export async function extractUrl(url: string): Promise<ImportedEvent> {
