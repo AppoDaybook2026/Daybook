@@ -448,3 +448,18 @@ h1 { margin: 0; color: #17392b; font-size: clamp(27px, 5vw, 38px); font-weight: 
   .col-type, .event-sub { display: none; }
   .add-event-button { margin-inline-start: 0; }
 }
+
+/* --- Neutralisation des règles de l'ancienne vue en liste --------
+   .event-row et .import-panel existaient déjà, en grille. Appliquées
+   telles quelles à un <tr> et au nouveau panneau, elles cassaient la
+   mise en page. On rétablit explicitement le comportement attendu. */
+
+.import-panel { display: block; }
+.event-table .event-row,
+.event-table .event-details {
+  display: table-row;
+  min-height: 0;
+  gap: 0;
+  grid-template-columns: none;
+}
+.event-table .event-row > td { display: table-cell; }
