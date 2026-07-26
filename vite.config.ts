@@ -9,6 +9,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       manifest: {
         name: 'Daybook',
         short_name: 'Daybook',
@@ -18,13 +21,7 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
       },
-      workbox: {
-        navigateFallback: 'index.html',
-        // Sans cette exclusion, le service worker renvoie index.html pour
-        // toute adresse /api/... tapée dans la barre d'adresse, ce qui masque
-        // les réponses du serveur et rend le diagnostic impossible.
-        navigateFallbackDenylist: [/^\/api\//],
-        cleanupOutdatedCaches: true,
+      injectManifest: {
         maximumFileSizeToCacheInBytes: 3_000_000,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,mjs}'],
       },

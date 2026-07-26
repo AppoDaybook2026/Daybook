@@ -55,7 +55,7 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     setImportMessage(t('reviewImport'))
   }
 
-  // Messages explicites : sans eux, un échec est indiscernable d'un autre.
+  // Messages explicites : sans eux, un echec est indiscernable d'un autre.
   function explain(error: unknown, fallback: string) {
     const code = error instanceof Error ? error.message : ''
     const known: Record<string, string> = {
@@ -110,6 +110,11 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     const permission = await Notification.requestPermission()
     setNotificationPermission(permission)
     window.dispatchEvent(new Event('daybook-notification-permission'))
+    if (permission === 'granted') {
+      // Signed-in users also get server-side generic Web Push at 09:00, 15:00
+      // and 21:00 — the payload never contains any personal content.
+      void import('./push').then(({ enablePushReminders }) => enablePushReminders()).catch(() => undefined)
+    }
   }
 
   const categoryOptions: { value: DeadlineCategory; label: string }[] = [

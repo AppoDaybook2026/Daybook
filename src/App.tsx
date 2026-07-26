@@ -3,12 +3,13 @@ import {
 } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import {
-  addTask, daysBetween, localDate, moveTask, setTaskCompleted, setTaskPriority,
+  addTask, daysBetween, db, localDate, moveTask, setTaskCompleted, setTaskPriority,
   startTimer, stopTimer, updateDailyTaskNotes, updateTaskText, type Priority,
 } from './db'
 import { type TodayTask, useTodayTasks } from './useTodayTasks'
 import MilestonesPage from './MilestonesPage'
 import DeadlinesPage from './DeadlinesPage'
+import AccountControl from './AccountPanel'
 import { translator, type Language, type Translate } from './i18n'
 import { useDeadlineReminders } from './useDeadlineReminders'
 
@@ -269,6 +270,8 @@ export default function App() {
   function changeLanguage(value: Language) {
     setLanguage(value)
     localStorage.setItem('daybook-language', value)
+    // Mirrored for the service worker so push reminders use the right language.
+    void db.appMeta.put({ key: 'language', value }).catch(() => undefined)
   }
 
   function changeTheme(value: Theme) {
@@ -296,6 +299,7 @@ export default function App() {
               <select aria-label={t('language')} onChange={(event) => changeLanguage(event.target.value as Language)} value={language}>
                 <option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option>
               </select>
+              {!demoMode && <AccountControl t={t} />}
             </div>
           </div>
         </div>
