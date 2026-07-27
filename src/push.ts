@@ -21,10 +21,21 @@ function urlBase64ToUint8Array(base64: string) {
 
 /** Subscribes this device to the generic reminder push. Requires a signed-in
  *  session; local-only users keep the in-app timer notifications instead. */
+/**
+ * Chaque cause d'échec lève une erreur distincte. Renvoyer `false` sans rien
+ * dire, comme le faisait la version précédente, rendait l'abonnement
+ * silencieusement inopérant : l'utilisateur croyait les rappels actifs alors
+ * qu'aucun abonnement n'avait été enregistré.
+ */
 export async function enablePushReminders(): Promise<boolean> {
-  if (!pushAvailable) return false
+  if (!vapidPublicKey) throw new Error('push-not-configured')
+  if (!supabase) throw new Error('push-needs-account')
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) throw new Error('push-unsupported')
+  if (typeof window === 'undefined' || !('PushManager' in window)) throw new Error('push-unsupported')
+
   const session = await currentSession()
-  if (!session) return false
+  if (!session) throw new Error('push-needs-signin')
+
   const registration = await navigator.serviceWorker.ready
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,

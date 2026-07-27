@@ -81,6 +81,7 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [notificationPermission, setNotificationPermission] = useState(() => typeof Notification === 'undefined' ? 'denied' : Notification.permission)
+  const [reminderMessage, setReminderMessage] = useState('')
 
   const [categoryFilter, setCategoryFilter] = useState<DeadlineCategory | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<SubmissionStatus | 'all'>('all')
@@ -255,12 +256,34 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
   }
 
   async function enableNotifications() {
-    if (typeof Notification === 'undefined') return
+    if (typeof Notification === 'undefined') {
+      setReminderMessage('This browser does not support notifications.')
+      return
+    }
     const permission = await Notification.requestPermission()
     setNotificationPermission(permission)
     window.dispatchEvent(new Event('daybook-notification-permission'))
-    if (permission === 'granted') {
-      void import('./push').then(({ enablePushReminders }) => enablePushReminders()).catch(() => undefined)
+
+    if (permission !== 'granted') {
+      setReminderMessage('Notifications are blocked. Allow them in your browser settings to receive reminders.')
+      return
+    }
+
+    // Les rappels serveur exigent un compte : sans abonnement enregistré,
+    // seuls les rappels locaux fonctionnent, et uniquement onglet ouvert.
+    try {
+      const { enablePushReminders } = await import('./push')
+      await enablePushReminders()
+      setReminderMessage('Reminders enabled at 09:00, 15:00 and 21:00, even when the app is closed.')
+    } catch (error) {
+      const code = error instanceof Error ? error.message : ''
+      const known: Record<string, string> = {
+        'push-needs-signin': 'Local reminders are on. Sign in to also receive them when the app is closed.',
+        'push-needs-account': 'Local reminders are on. Server reminders require an account.',
+        'push-not-configured': 'Local reminders are on. Server reminders are not configured on this deployment.',
+        'push-unsupported': 'Local reminders are on. This browser cannot receive reminders when the app is closed.',
+      }
+      setReminderMessage(known[code] ?? `Local reminders are on, but the server subscription failed${code ? ` (${code})` : ''}.`)
     }
   }
 
@@ -274,10 +297,13 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
           <h1>{t('events')}</h1>
           <p className="heading-subtitle">{visible.length} {t('matchingEvents')} · {activeCount} {t('activeCount')}</p>
         </div>
-        <button className={`reminder-control ${notificationPermission === 'granted' ? 'reminder-enabled' : ''}`} onClick={() => void enableNotifications()}>
-          <Bell size={17} />
-          <span>{notificationPermission === 'granted' ? t('remindersEnabled') : t('enableReminders')}<small>{t('reminders')}</small></span>
-        </button>
+        <div className="reminder-zone">
+          <button className={`reminder-control ${notificationPermission === 'granted' ? 'reminder-enabled' : ''}`} onClick={() => void enableNotifications()}>
+            <Bell size={17} />
+            <span>{notificationPermission === 'granted' ? t('remindersEnabled') : t('enableReminders')}<small>{t('reminders')}</small></span>
+          </button>
+          {reminderMessage && <p className="reminder-message" role="status">{reminderMessage}</p>}
+        </div>
       </div>
 
       {nextEvent && (

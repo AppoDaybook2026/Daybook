@@ -602,3 +602,17 @@ h1 { margin: 0; color: #2c2c2a; font-size: clamp(27px, 5vw, 38px); font-weight: 
   .next-event-label { grid-column: 1 / -1; }
   .next-event-strip > svg { display: none; }
 }
+
+/* Retour explicite après activation des rappels : sans lui, un abonnement
+   qui échoue laisse croire que tout va bien. */
+.reminder-zone { display: grid; justify-items: end; gap: 6px; max-width: 340px; }
+.reminder-message {
+  margin: 0;
+  padding: 8px 11px;
+  border-radius: 5px;
+  background: #f1efe8;
+  color: #444441;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: end;
+}
