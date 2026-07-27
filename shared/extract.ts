@@ -1,18 +1,11 @@
 /**
- * Daybook — Worker serveur.
+ * Daybook — logique serveur partagée par les Pages Functions.
  *
- * Deux rôles :
- *   1. POST /api/extract-event  → va chercher la page ou reçoit le texte d'un
- *      PDF, puis demande à Gemini d'en extraire les champs de l'événement.
- *   2. tout le reste            → sert l'application React (fichiers statiques).
- *
- * Pourquoi côté serveur : le CORS est une règle imposée par le NAVIGATEUR.
- * Un serveur qui va chercher une page n'y est pas soumis. Et la clé Gemini
- * reste ici, elle n'est jamais envoyée au navigateur.
+ * Le serveur va chercher la page lui-même (aucun CORS, c'est une règle du
+ * navigateur uniquement) et garde la clé Gemini de son côté : elle n'est
+ * jamais envoyée au navigateur.
  */
-
-interface Env {
-  ASSETS: { fetch: (request: Request) => Promise<Response> }
+export interface Env {
   GEMINI_API_KEY?: string
 }
 
@@ -388,14 +381,14 @@ const EVENT_TYPES = new Set([
 ])
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
-function json(body: unknown, status = 200) {
+export function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   })
 }
 
-async function handleExtract(request: Request, env: Env): Promise<Response> {
+export async function handleExtract(request: Request, env: Env): Promise<Response> {
   let payload: ExtractRequest
   try {
     payload = (await request.json()) as ExtractRequest
@@ -457,39 +450,3 @@ async function handleExtract(request: Request, env: Env): Promise<Response> {
 }
 
 /* ------------------------------------------------------------------ */
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url)
-
-    if (url.pathname === '/api/extract-event') {
-      if (request.method !== 'POST') {
-        return json({ error: 'method-not-allowed' }, 405)
-      }
-      return handleExtract(request, env)
-    }
-
-    // Diagnostic : indique si la clé est bien vue par le serveur (sans la révéler).
-    if (url.pathname === '/api/health') {
-      return json({ ok: true, geminiConfigured: Boolean(env.GEMINI_API_KEY) })
-    }
-
-    // Toute autre adresse /api/... n'existe pas : on le dit, plutôt que de
-    // renvoyer l'application et de laisser croire à une réponse valide.
-    if (url.pathname.startsWith('/api/')) {
-      return json({ error: 'not-found' }, 404)
-    }
-
-    const response = await env.ASSETS.fetch(request)
-    if (response.status !== 404) return response
-
-    // Repli application monopage : réservé aux navigations. Un fichier absent
-    // (script, image, feuille de style) garde son 404, ce qui rend les erreurs
-    // de déploiement immédiatement lisibles.
-    const wantsHtml = request.headers.get('accept')?.includes('text/html')
-    if (request.method === 'GET' && wantsHtml) {
-      return env.ASSETS.fetch(new Request(new URL('/index.html', url), request))
-    }
-    return response
-  },
-}

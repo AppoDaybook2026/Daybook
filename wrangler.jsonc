@@ -1,24 +1,11 @@
 {
-  // Daybook — Cloudflare Worker qui sert l'application ET expose /api/*.
+  // Daybook — projet Cloudflare Pages.
   //
-  // Sans ce fichier, le déploiement ne contient que des fichiers statiques :
-  // aucune route serveur n'existe, et tout appel POST /api/... répond 405.
+  // Les routes serveur vivent dans functions/api/. Pages les fait passer
+  // avant les fichiers statiques, il n'y a donc aucun routage à écrire.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "daybook",
-  "main": "worker/index.ts",
   "compatibility_date": "2026-07-25",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    // "none" : un fichier absent répond 404, honnêtement. Le repli vers
-    // index.html est fait dans worker/index.ts, uniquement pour les vraies
-    // navigations. Avec "single-page-application", un asset manquant
-    // renvoyait index.html, ce qui produisait une erreur de type MIME
-    // incompréhensible au lieu d'un simple « fichier introuvable ».
-    "not_found_handling": "none"
-  },
-  "observability": {
-    "enabled": true
-  }
+  "pages_build_output_dir": "dist"
 }
