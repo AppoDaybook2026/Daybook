@@ -129,6 +129,18 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
     [deadlines],
   )
 
+  /**
+   * L'échéance la plus proche qui demande encore une action. On ignore les
+   * dossiers clos et les dates passées : un bandeau qui met en avant une
+   * candidature déjà refusée n'aide personne.
+   */
+  const nextEvent = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return deadlines
+      .filter((item) => item.date >= today && !CLOSED_STATUSES.includes(item.status))
+      .sort((a, b) => a.date.localeCompare(b.date))[0]
+  }, [deadlines])
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((value) => !value)
     else { setSortKey(key); setSortAsc(true) }
@@ -268,6 +280,28 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
         </button>
       </div>
 
+      {nextEvent && (
+        <button
+          className="next-event-strip"
+          onClick={() => {
+            // On lève les filtres, sans quoi l'événement mis en avant pourrait
+            // rester invisible dans le tableau, ce qui serait déroutant.
+            resetFilters()
+            setExpanded(expanded === nextEvent.id ? null : nextEvent.id!)
+            document.getElementById(`event-${nextEvent.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }}
+          type="button"
+        >
+          <span className="next-event-label">{t('nextEvent')}</span>
+          <strong>{nextEvent.name}</strong>
+          <span className="next-event-meta">
+            <time dateTime={nextEvent.date}>{nextEvent.date}</time>
+            <DueBadge date={nextEvent.date} t={t} />
+          </span>
+          <ChevronDown size={16} />
+        </button>
+      )}
+
       <section className="import-panel" aria-labelledby="import-title">
         <div className="import-head"><FileUp size={18} /><h2 id="import-title">{t('importEvent')}</h2></div>
         <form onSubmit={importFromUrl}>
@@ -395,7 +429,7 @@ export default function DeadlinesPage({ t }: { t: Translate }) {
             <tbody>
               {visible.map((event) => (
                 <Fragment key={event.id}>
-                  <tr className={`event-row status-${event.status}`}>
+                  <tr className={`event-row status-${event.status} ${nextEvent?.id === event.id ? 'is-next' : ''}`} id={`event-${event.id}`}>
                     <td className="col-priority">
                       <PriorityStars label={t('priorityLabel')} onChange={(next) => void updateDeadline(event.id!, { priority: next })} value={event.priority ?? 0} />
                     </td>

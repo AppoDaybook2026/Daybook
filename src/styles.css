@@ -550,3 +550,55 @@ h1 { margin: 0; color: #2c2c2a; font-size: clamp(27px, 5vw, 38px); font-weight: 
 .status-on-track { background: #e6f1fb; color: #0c447c; }
 .status-in-progress { background: #faeeda; color: #633806; }
 .status-upcoming { background: #f1efe8; color: #444441; }
+
+/* --- Bandeau « Prochain événement » ------------------------------
+   Repère unique en haut de page : l'échéance la plus proche qui
+   demande encore une action. Cliquable, il déplie la ligne
+   correspondante dans le tableau et y amène le regard. */
+
+.next-event-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  margin-bottom: 18px;
+  padding: 0 16px;
+  border: 1px solid #dbd9d1;
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
+  background: white;
+  color: #5f5e5a;
+  font-size: 15px;
+  text-align: start;
+}
+.next-event-strip:hover { background: #faf9f7; border-color: #b4b2a9; }
+.next-event-label {
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.next-event-strip strong {
+  overflow: hidden;
+  color: #2c2c2a;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.next-event-meta { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.next-event-meta time { color: #444441; font-variant-numeric: tabular-nums; }
+.next-event-strip > svg { color: #888780; flex: none; }
+
+/* La ligne correspondante est discrètement signalée dans le tableau. */
+.event-table .event-row.is-next > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+@media (max-width: 700px) {
+  .next-event-strip { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding-block: 10px; }
+  .next-event-label { grid-column: 1 / -1; }
+  .next-event-strip > svg { display: none; }
+}
