@@ -1,4 +1,4 @@
-import { CloudOff, Copy, Download, KeyRound, Loader2, Lock, LogOut, RefreshCw, ShieldCheck, Unlock, Upload, UserRound, X } from 'lucide-react'
+import { CircleUserRound, CloudOff, Copy, Download, KeyRound, Loader2, Lock, LogOut, RefreshCw, ShieldCheck, Unlock, Upload, X } from 'lucide-react'
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import {
@@ -73,7 +73,7 @@ export default function AccountControl({ t }: { t: Translate }) {
   if (!supabase) return null
 
   const statusIcon = !session
-    ? <UserRound size={16} />
+    ? <CircleUserRound size={19} />
     : !unlocked
       ? <Lock size={16} />
       : phase === 'offline'
@@ -127,7 +127,9 @@ function AccountModal({ session, unlocked, recoveryMode, onClose, t }: {
 /* ---------------------------- signed out --------------------------- */
 
 function AuthForms({ t }: { t: Translate }) {
-  const [view, setView] = useState<AuthView>('signin')
+  // Un visiteur qui découvre l'application n'a pas de compte : lui présenter
+  // d'abord la connexion l'oblige à comprendre qu'il doit basculer ailleurs.
+  const [view, setView] = useState<AuthView>('signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)

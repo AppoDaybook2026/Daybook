@@ -80,7 +80,7 @@ async function serializeRow(collection: SyncedCollection, uuid: string): Promise
       const row = await db.milestones.where('uuid').equals(uuid).first()
       if (!row) return undefined
       return {
-        uuid, progress: row.progress, position: row.position, createdAt: row.createdAt,
+        uuid, kind: row.kind, progress: row.progress, position: row.position, createdAt: row.createdAt,
         updatedAt: row.updatedAt, dateLabel: row.dateLabel, status: row.status,
         startDate: row.startDate, endDate: row.endDate, modifiedAt: row.modifiedAt,
         title: await decryptLocal(row.title), notes: await decryptLocal(row.notes),
@@ -329,6 +329,8 @@ async function upsertLocalRow(collection: SyncedCollection, plain: PulledPayload
         uuid,
         title: await encryptLocal(String(plain.title ?? '')),
         notes: await encryptLocal(String(plain.notes ?? '')),
+        // Champ ajouté en v10 : un appareil resté en v9 ne l'envoie pas.
+        kind: (plain.kind as Milestone['kind']) ?? 'chapter',
         progress: Number(plain.progress ?? 0),
         position: Number(plain.position ?? 0),
         createdAt: String(plain.createdAt ?? new Date().toISOString()),

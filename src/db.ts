@@ -35,10 +35,18 @@ export interface TimeSession {
   modifiedAt?: string
 }
 
+/**
+ * Un jalon est soit un chapitre de la thèse, soit un moment clé du parcours
+ * doctoral — approbation éthique, intégration finale, soutenance. Ces derniers
+ * ne se numérotent pas et ne se lisent pas comme des chapitres.
+ */
+export type MilestoneKind = 'chapter' | 'moment'
+
 export interface Milestone {
   id?: number
   uuid?: string
   title: string
+  kind: MilestoneKind
   progress: number
   notes: string
   position: number
@@ -266,6 +274,23 @@ class DaybookDatabase extends Dexie {
           modifiedAt: new Date().toISOString(),
         })))
     })
+
+    // v10 : distinction chapitre / moment clé du parcours doctoral.
+    this.version(10).stores({
+      tasks: '++id, &uuid, createdOn, createdAt',
+      dailyTasks: '++id, &uuid, &[taskId+date], date, completed, priority, position',
+      timeSessions: '++id, &uuid, taskId, startedAt, endedAt',
+      milestones: '++id, &uuid, position, status, kind, updatedAt',
+      subactivities: '++id, &uuid, milestoneId, completed, position',
+      deadlines: '++id, &uuid, category, date, eventDate, status, priority, updatedAt',
+      appMeta: '&key',
+      outbox: '++id, [collection+uuid], queuedAt',
+      pendingRows: '++id, &[collection+uuid], receivedAt',
+    }).upgrade(async (transaction) => {
+      const rows = await transaction.table('milestones').toArray()
+      await Promise.all(rows.map((row: Partial<Milestone> & { id: number }) =>
+        transaction.table('milestones').update(row.id, { kind: row.kind ?? 'chapter' })))
+    })
   }
 }
 
@@ -435,103 +460,279 @@ export async function stopTimer(taskId: number) {
   })
 }
 
-const dissertationTimeline = [
+/**
+ * Ossature par défaut : le plan d'une thèse en sciences de l'éducation,
+ * entrecoupé des moments clés du parcours doctoral. Les « moments » ne sont
+ * pas des chapitres : ils ne se numérotent pas et se placent là où ils
+ * surviennent réellement — l'approbation éthique après la méthodologie,
+ * l'intégration et la soutenance une fois le manuscrit complet.
+ */
+const thesisOutline: {
+  title: string
+  kind: MilestoneKind
+  sections: string[]
+}[] = [
   {
-    title: 'Chapter 1 — Introduction and research problem',
-    dateLabel: 'Février 2026', status: 'drafted' as const,
-    subactivities: ['Context and rationale', 'Research problem', 'Objectives and research questions', 'Expected contribution of the study'],
+    title: 'I. Introduction',
+    kind: 'chapter',
+    sections: [
+      '1.1 Hook and background on educational issue',
+      '1.2 Statement of the problem',
+      '1.3 Purpose of the study',
+      '1.4 Research questions and objectives',
+      '1.5 Significance for educational practice and policy',
+      '1.6 Scope and delimitations',
+      '1.7 Key terms and definitions',
+    ],
   },
   {
-    title: 'Chapter 2 — Literature review and conceptual framework',
-    dateLabel: 'Mars – avril 2026', status: 'drafted' as const,
-    subactivities: ['Structured literature search', 'Critical synthesis of prior work', 'Theoretical and conceptual framework', 'Literature gaps and propositions'],
+    title: 'II. Review of the literature',
+    kind: 'chapter',
+    sections: [
+      '2.1 Historical context and evolution of the topic',
+      '2.2 Theoretical frameworks in education',
+      '2.2.1 Learning theory or educational framework A',
+      '2.2.2 Learning theory or educational framework B',
+      '2.3 Current research on the main topic',
+      '2.4 Influential studies and seminal works',
+      '2.5 Gaps in the literature and unanswered questions',
+      '2.6 Conceptual or analytical framework',
+    ],
   },
   {
-    title: 'Chapter 3 — Methodology and research design',
-    dateLabel: 'Mai 2026', status: 'drafted' as const,
-    subactivities: ['Research design selection', 'Population, sample and field site', 'Variables and measurement strategy', 'Data analysis plan'],
-  },
-  {
-    title: 'Data collection instruments',
-    dateLabel: 'Juin – août 2026', status: 'on-track' as const,
-    subactivities: ['First instrument draft', 'Expert validation', 'Pretest or pilot study', 'Revision and final version'],
-  },
-  {
-    title: 'Secondary data assembly',
-    dateLabel: 'En parallèle · 2026', status: 'in-progress' as const,
-    subactivities: ['Identify secondary sources', 'Obtain access permissions', 'Compile and document the data', 'Check data quality'],
+    title: 'III. Methodology',
+    kind: 'chapter',
+    sections: [
+      '3.1 Research design',
+      '3.2 Participants and educational setting',
+      '3.3 Data collection methods',
+      '3.3.1 Method 1 — surveys, interviews',
+      '3.3.2 Method 2 — classroom observations',
+      '3.4 Data analysis procedures',
+      '3.5 Validity, reliability and credibility',
+      '3.6 Ethical considerations in educational research',
+    ],
   },
   {
     title: 'Ethics approval — IRB',
-    dateLabel: 'Septembre 2026', status: 'upcoming' as const,
-    subactivities: ['Finalize the protocol', 'Prepare informed consent', 'Finalize the data management plan', 'Submit the IRB application'],
+    kind: 'moment',
+    sections: [
+      'Finalize the protocol',
+      'Prepare informed consent documents',
+      'Finalize the data management plan',
+      'Submit the IRB application',
+      'Address reviewer comments',
+    ],
   },
   {
-    title: 'Primary data collection and fieldwork',
-    dateLabel: 'Octobre 2026 – mars 2027', status: 'upcoming' as const,
-    subactivities: ['Prepare the fieldwork', 'Recruit participants', 'Conduct data collection', 'Close and secure the data'],
+    title: 'IV. Findings and results',
+    kind: 'chapter',
+    sections: [
+      '4.1 Demographic and contextual information',
+      '4.2 Findings related to research question 1',
+      '4.3 Findings related to research question 2',
+      '4.4 Findings related to research question 3',
+      '4.5 Emergent themes or unexpected patterns',
+    ],
   },
   {
-    title: 'Data analysis',
-    dateLabel: 'Avril – septembre 2027', status: 'upcoming' as const,
-    subactivities: ['Clean and prepare the data', 'Run the main analyses', 'Conduct robustness analyses', 'Interpret and synthesize results'],
+    title: 'V. Discussion',
+    kind: 'chapter',
+    sections: [
+      '5.1 Interpretation of findings in light of literature',
+      '5.2 Alignment with and divergence from theoretical frameworks',
+      '5.3 Limitations of the study',
+      '5.4 Implications for educational practice',
+      '5.5 Implications for educational policy',
+      '5.6 Implications for teacher professional development',
+      '5.7 Recommendations for future research',
+    ],
   },
   {
-    title: 'Chapter 4 — Presentation of results',
-    dateLabel: 'Octobre 2027 – janvier 2028', status: 'upcoming' as const,
-    subactivities: ['Structure the results', 'Produce tables and figures', 'Write the main findings', 'Review the chapter with supervisors'],
+    title: 'VI. Conclusion',
+    kind: 'chapter',
+    sections: [
+      '6.1 Summary of key findings',
+      '6.2 Contributions to the field of education',
+      '6.3 Transformative potential and call to action',
+    ],
   },
   {
-    title: 'Chapter 5 — Discussion and conclusion',
-    dateLabel: 'Février – avril 2028', status: 'upcoming' as const,
-    subactivities: ['Discuss findings against the literature', 'Present the contributions', 'Formulate limitations and recommendations', 'Write the general conclusion'],
+    title: 'References',
+    kind: 'chapter',
+    sections: [
+      'Compile and deduplicate the bibliography',
+      'Check citation style consistency',
+      'Verify every in-text citation has an entry',
+    ],
+  },
+  {
+    title: 'Appendices',
+    kind: 'chapter',
+    sections: [
+      'Appendix A — survey instruments, interview protocols',
+      'Appendix B — institutional review board approval',
+      'Appendix C — coding schemes, rubrics',
+    ],
   },
   {
     title: 'Full dissertation integration and revision',
-    dateLabel: 'Mai – juin 2028', status: 'upcoming' as const,
-    subactivities: ['Harmonize all chapters', 'Check references and appendices', 'Integrate committee feedback', 'Finalize the complete manuscript'],
+    kind: 'moment',
+    sections: [
+      'Assemble all chapters into one manuscript',
+      'Harmonize voice, terminology and formatting',
+      'Supervisor review and revision cycle',
+      'Language editing and proofreading',
+      'Final formatting and plagiarism check',
+    ],
   },
   {
     title: 'Dissertation defense preparation and defense',
-    dateLabel: 'Juillet – septembre 2028', status: 'upcoming' as const,
-    subactivities: ['Submit the manuscript', 'Prepare the presentation', 'Rehearse the defense', 'Defend and integrate final corrections'],
+    kind: 'moment',
+    sections: [
+      'Submit the manuscript to the jury',
+      'Prepare the presentation',
+      'Rehearse the defense',
+      'Defend',
+      'Integrate final corrections',
+    ],
   },
 ]
 
+/** Clé de version de l'ossature : la changer déclenche un remplacement. */
+const OUTLINE_KEY = 'thesisOutline2026'
+
 export async function prepareMilestones() {
-  // In cloud mode, wait for the first pull before seeding: the account may
-  // already contain milestones from another device.
+  // En mode cloud, on attend la première synchronisation : le compte peut
+  // déjà contenir des jalons venus d'un autre appareil, et les effacer avant
+  // de les avoir vus produirait une perte silencieuse.
   const cloudMode = await db.appMeta.get('cloudMode')
-  if (cloudMode?.value === 'on') {
-    const pulled = await db.appMeta.get('initialPullDone')
-    if (!pulled) return
-    const existing = await db.milestones.count()
-    if (existing > 0) return
-  }
+  if (cloudMode?.value === 'on' && !(await db.appMeta.get('initialPullDone'))) return
+  if (await db.appMeta.get(OUTLINE_KEY)) return
+
+  // Le chiffrement passe par WebCrypto, étranger aux transactions Dexie.
+  // L'attendre à l'intérieur ferait valider la transaction prématurément et
+  // l'ossature ne serait posée qu'à moitié. On prépare donc tout avant.
+  const emptyNotes = await encryptLocal('')
+  const prepared = await Promise.all(thesisOutline.map(async (entry) => ({
+    kind: entry.kind,
+    title: await encryptLocal(entry.title),
+    sections: await Promise.all(entry.sections.map((section) => encryptLocal(section))),
+  })))
+
   await db.transaction('rw', db.milestones, db.subactivities, db.appMeta, db.outbox, async () => {
-    if (await db.appMeta.get('dissertationTimelineSeeded')) return
+    if (await db.appMeta.get(OUTLINE_KEY)) return
+
+    // Le remplacement doit se propager au cloud, sinon la synchronisation
+    // suivante ramènerait l'ancienne ossature.
+    const previousMilestones = await db.milestones.toArray()
+    const previousSections = await db.subactivities.toArray()
+    for (const milestone of previousMilestones) {
+      if (milestone.uuid) await queueChange('milestone', milestone.uuid, 'delete')
+    }
+    for (const section of previousSections) {
+      if (section.uuid) await queueChange('subactivity', section.uuid, 'delete')
+    }
     await db.subactivities.clear()
     await db.milestones.clear()
+
     const timestamp = new Date().toISOString()
-    for (const [position, item] of dissertationTimeline.entries()) {
+    for (const [position, entry] of prepared.entries()) {
       const milestoneUuid = newUuid()
       const milestoneId = await db.milestones.add({
-        title: item.title, dateLabel: item.dateLabel, status: item.status,
-        startDate: position === 10 ? '2028-05' : position === 11 ? '2028-07' : '',
-        endDate: position === 10 ? '2028-06' : position === 11 ? '2028-09' : '',
-        progress: 0, notes: '', position, createdAt: timestamp, updatedAt: timestamp,
+        title: entry.title,
+        kind: entry.kind,
+        dateLabel: '',
+        status: 'upcoming',
+        startDate: '', endDate: '',
+        progress: 0, notes: emptyNotes,
+        position, createdAt: timestamp, updatedAt: timestamp,
         uuid: milestoneUuid, modifiedAt: timestamp,
       }) as number
       await queueChange('milestone', milestoneUuid)
-      const items = item.subactivities.map((title, subPosition) => ({
-        milestoneId, title, completed: false, position: subPosition, createdAt: timestamp,
-        uuid: newUuid(), modifiedAt: timestamp,
+
+      const sections = entry.sections.map((title, subPosition) => ({
+        milestoneId,
+        title,
+        completed: false,
+        position: subPosition,
+        createdAt: timestamp,
+        uuid: newUuid(),
+        modifiedAt: timestamp,
       }))
-      await db.subactivities.bulkAdd(items)
-      for (const sub of items) await queueChange('subactivity', sub.uuid)
+      await db.subactivities.bulkAdd(sections)
+      for (const section of sections) await queueChange('subactivity', section.uuid)
     }
-    await db.appMeta.put({ key: 'dissertationTimelineSeeded', value: timestamp })
-    await queueChange('appMeta', 'dissertationTimelineSeeded')
+
+    await db.appMeta.put({ key: OUTLINE_KEY, value: timestamp })
+    await queueChange('appMeta', OUTLINE_KEY)
+  })
+}
+
+/**
+ * Déplace un jalon d'un cran. Les positions sont échangées avec le voisin,
+ * ce qui évite de renuméroter toute la liste à chaque mouvement.
+ */
+export async function moveMilestone(id: number, direction: -1 | 1) {
+  await db.transaction('rw', db.milestones, db.outbox, async () => {
+    const ordered = await db.milestones.orderBy('position').toArray()
+    const index = ordered.findIndex((milestone) => milestone.id === id)
+    const target = index + direction
+    if (index === -1 || target < 0 || target >= ordered.length) return
+
+    const current = ordered[index]
+    const neighbour = ordered[target]
+    const timestamp = new Date().toISOString()
+    await db.milestones.update(current.id!, { position: neighbour.position, modifiedAt: timestamp, updatedAt: timestamp })
+    await db.milestones.update(neighbour.id!, { position: current.position, modifiedAt: timestamp, updatedAt: timestamp })
+    if (current.uuid) await queueChange('milestone', current.uuid)
+    if (neighbour.uuid) await queueChange('milestone', neighbour.uuid)
+  })
+}
+
+/**
+ * Insère un jalon juste après celui indiqué, en décalant les suivants.
+ * `afterId` à null insère en tête.
+ */
+export async function insertMilestone(afterId: number | null, title: string, kind: MilestoneKind = 'chapter') {
+  const cleanTitle = title.trim()
+  if (!cleanTitle) return
+
+  // Chiffrement hors transaction : voir prepareMilestones.
+  const encryptedTitle = await encryptLocal(cleanTitle)
+  const encryptedNotes = await encryptLocal('')
+
+  await db.transaction('rw', db.milestones, db.outbox, async () => {
+    const ordered = await db.milestones.orderBy('position').toArray()
+    const anchor = afterId === null ? -1 : ordered.findIndex((milestone) => milestone.id === afterId)
+    const insertAt = anchor + 1
+    const timestamp = new Date().toISOString()
+
+    // On décale les suivants avant d'insérer, pour ne jamais avoir deux
+    // jalons à la même position.
+    for (let index = ordered.length - 1; index >= insertAt; index -= 1) {
+      const milestone = ordered[index]
+      await db.milestones.update(milestone.id!, { position: index + 1, modifiedAt: timestamp })
+      if (milestone.uuid) await queueChange('milestone', milestone.uuid)
+    }
+
+    const uuid = newUuid()
+    await db.milestones.add({
+      title: encryptedTitle,
+      kind,
+      progress: 0,
+      notes: encryptedNotes,
+      position: insertAt,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      dateLabel: '',
+      status: 'upcoming',
+      startDate: '',
+      endDate: '',
+      uuid,
+      modifiedAt: timestamp,
+    })
+    await queueChange('milestone', uuid)
   })
 }
 
@@ -546,6 +747,7 @@ export async function addMilestone(title: string) {
   await db.transaction('rw', db.milestones, db.outbox, async () => {
     await db.milestones.add({
       title: encryptedTitle,
+      kind: 'chapter',
       progress: 0,
       notes: '',
       position,

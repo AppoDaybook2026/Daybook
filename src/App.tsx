@@ -292,14 +292,25 @@ export default function App() {
               <button className={`nav-item ${page === 'deadlines' ? 'nav-item-active' : ''}`} onClick={() => setPage('deadlines')}>{t('deadlines')}</button>
             </nav>
             <div className="preference-controls">
-              <select aria-label={t('theme')} onChange={(event) => changeTheme(event.target.value as Theme)} value={theme}>
-                <option value="green">● {t('green')}</option><option value="blue">● {t('blue')}</option>
-                <option value="coral">● {t('coral')}</option><option value="violet">● {t('violet')}</option>
-              </select>
-              <select aria-label={t('language')} onChange={(event) => changeLanguage(event.target.value as Language)} value={language}>
-                <option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option>
-              </select>
-              {!demoMode && <AccountControl t={t} />}
+              <label className="control-field">
+                <span>{t('colorLabel')}</span>
+                <select aria-label={t('colorLabel')} onChange={(event) => changeTheme(event.target.value as Theme)} value={theme}>
+                  <option value="green">● {t('green')}</option><option value="blue">● {t('blue')}</option>
+                  <option value="coral">● {t('coral')}</option><option value="violet">● {t('violet')}</option>
+                </select>
+              </label>
+              <label className="control-field">
+                <span>{t('languageLabel')}</span>
+                <select aria-label={t('languageLabel')} onChange={(event) => changeLanguage(event.target.value as Language)} value={language}>
+                  <option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option>
+                </select>
+              </label>
+              {!demoMode && (
+                <div className="control-field">
+                  <span>{t('accountLabel')}</span>
+                  <AccountControl t={t} />
+                </div>
+              )}
             </div>
           </div>
         </div>

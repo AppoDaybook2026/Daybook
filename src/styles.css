@@ -616,3 +616,35 @@ h1 { margin: 0; color: #2c2c2a; font-size: clamp(27px, 5vw, 38px); font-weight: 
   line-height: 1.45;
   text-align: end;
 }
+
+/* --- En-tête : libellés visibles au-dessus des contrôles ----------
+   Un sélecteur sans étiquette oblige à deviner ce qu'il règle. */
+
+.control-field { display: grid; justify-items: center; gap: 3px; }
+.control-field > span {
+  color: #888780;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.preference-controls { align-items: flex-start; gap: 12px; }
+.account-button { width: 36px; height: 36px; border-radius: 6px; }
+
+/* --- Plan de thèse : chapitres et moments du parcours -------------
+   Les moments (approbation éthique, intégration, soutenance) ne sont
+   pas des chapitres : ils portent un fanion au lieu d'un numéro. */
+
+.milestone-controls { display: flex; align-items: center; gap: 2px; }
+.milestone-moment {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+.milestone-block:has(.milestone-moment) { border-left: 3px solid var(--accent); }
+
+@media (max-width: 680px) {
+  .milestone-controls { grid-area: 2 / 3; }
+  .control-field > span { font-size: 10px; }
+}

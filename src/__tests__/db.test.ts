@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addTask, CLOSED_STATUSES, db, deleteDeadline, addDeadline, localDate, prepareToday, queueChange, setTaskCompleted, updateDeadline } from '../db'
+import { addMilestone, addTask, CLOSED_STATUSES, db, deleteDeadline, addDeadline, insertMilestone, localDate, moveMilestone, prepareMilestones, prepareToday, queueChange, setTaskCompleted, updateDeadline } from '../db'
 import { decryptLocal } from '../localCrypto'
 
 async function reset() {
@@ -140,5 +140,111 @@ describe('suivi des candidatures (v9)', () => {
     expect(CLOSED_STATUSES).toContain('rejected')
     expect(CLOSED_STATUSES).toContain('presented')
     expect(CLOSED_STATUSES).not.toContain('submitted')
+  })
+})
+
+describe('plan de these reorganisable (v10)', () => {
+  beforeEach(reset)
+
+  /** Titres des jalons dans l'ordre, dechiffres. */
+  async function ordered() {
+    const rows = await db.milestones.orderBy('position').toArray()
+    return Promise.all(rows.map((row) => decryptLocal(row.title)))
+  }
+
+  async function seed(titles: string[]) {
+    for (const title of titles) await addMilestone(title)
+    await db.outbox.clear()
+  }
+
+  it('l ossature par defaut alterne chapitres et moments du parcours', async () => {
+    await prepareMilestones()
+    const rows = await db.milestones.orderBy('position').toArray()
+    const titles = await Promise.all(rows.map((row) => decryptLocal(row.title)))
+
+    expect(titles[0]).toBe('I. Introduction')
+    expect(titles).toContain('Ethics approval — IRB')
+    expect(titles.at(-1)).toBe('Dissertation defense preparation and defense')
+
+    // L'approbation ethique suit la methodologie, pas les chapitres de fond.
+    expect(titles.indexOf('Ethics approval — IRB')).toBe(titles.indexOf('III. Methodology') + 1)
+
+    const moments = rows.filter((row) => row.kind === 'moment')
+    expect(moments).toHaveLength(3)
+    // Les positions sont uniques et contigues.
+    expect(rows.map((row) => row.position)).toEqual([...rows.keys()])
+  })
+
+  it('deplace un chapitre sans casser l ordre', async () => {
+    await seed(['A', 'B', 'C'])
+    const rows = await db.milestones.orderBy('position').toArray()
+
+    await moveMilestone(rows[2].id!, -1)
+    expect(await ordered()).toEqual(['A', 'C', 'B'])
+
+    await moveMilestone(rows[2].id!, -1)
+    expect(await ordered()).toEqual(['C', 'A', 'B'])
+  })
+
+  it('refuse de deplacer au-dela des bornes', async () => {
+    await seed(['A', 'B'])
+    const rows = await db.milestones.orderBy('position').toArray()
+    await moveMilestone(rows[0].id!, -1)
+    await moveMilestone(rows[1].id!, 1)
+    expect(await ordered()).toEqual(['A', 'B'])
+  })
+
+  it('insere un chapitre entre deux existants', async () => {
+    await seed(['A', 'B', 'C'])
+    const rows = await db.milestones.orderBy('position').toArray()
+
+    await insertMilestone(rows[0].id!, 'A-bis')
+    expect(await ordered()).toEqual(['A', 'A-bis', 'B', 'C'])
+
+    // Aucune position en double apres le decalage.
+    const positions = (await db.milestones.orderBy('position').toArray()).map((row) => row.position)
+    expect(new Set(positions).size).toBe(positions.length)
+  })
+
+  it('insere en tete quand aucun ancrage n est fourni', async () => {
+    await seed(['A', 'B'])
+    await insertMilestone(null, 'Zero')
+    expect(await ordered()).toEqual(['Zero', 'A', 'B'])
+  })
+
+  it('propage deplacements et insertions a la synchronisation', async () => {
+    await seed(['A', 'B'])
+    const rows = await db.milestones.orderBy('position').toArray()
+
+    await moveMilestone(rows[0].id!, 1)
+    // Les deux voisins ont change de place : les deux doivent partir.
+    expect(await db.outbox.count()).toBe(2)
+
+    await db.outbox.clear()
+    await insertMilestone(rows[0].id!, 'C')
+    const queued = await db.outbox.toArray()
+    expect(queued.every((entry) => entry.collection === 'milestone')).toBe(true)
+    expect(queued.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('le remplacement de l ossature efface aussi cote nuage', async () => {
+    await seed(['Ancien chapitre'])
+    const previous = await db.milestones.toCollection().first()
+    await db.outbox.clear()
+
+    await prepareMilestones()
+
+    // L'ancien jalon doit partir en suppression, sinon la synchronisation
+    // suivante le ramenerait.
+    const deletions = await db.outbox.filter((entry) => entry.op === 'delete').toArray()
+    expect(deletions.some((entry) => entry.uuid === previous!.uuid)).toBe(true)
+    expect(await ordered()).not.toContain('Ancien chapitre')
+  })
+
+  it('ne rejoue pas le remplacement une fois applique', async () => {
+    await prepareMilestones()
+    const first = await db.milestones.count()
+    await prepareMilestones()
+    expect(await db.milestones.count()).toBe(first)
   })
 })

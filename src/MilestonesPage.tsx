@@ -1,9 +1,10 @@
 import { liveQuery } from 'dexie'
-import { CalendarDays, Check, CheckCircle2, Plus, Trash2 } from 'lucide-react'
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, CalendarDays, Check, CheckCircle2, CornerDownRight, Flag, Plus, Trash2 } from 'lucide-react'
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  addMilestone, addSubactivities, db, deleteMilestone, deleteSubactivity, prepareMilestones,
-  setSubactivityCompleted, updateMilestone, updateSubactivity, type Milestone, type Subactivity,
+  addMilestone, addSubactivities, db, deleteMilestone, deleteSubactivity, insertMilestone,
+  moveMilestone, prepareMilestones, setSubactivityCompleted, updateMilestone, updateSubactivity,
+  type Milestone, type Subactivity,
 } from './db'
 import type { Language, Translate } from './i18n'
 import demoData from './demo-data.json'
@@ -92,7 +93,15 @@ function SubactivityRow({ item, readOnly }: { item: Subactivity; readOnly: boole
   )
 }
 
-function MilestoneBlock({ milestone, index, t, readOnly }: { milestone: MilestoneWithItems; index: number; t: Translate; readOnly: boolean }) {
+function MilestoneBlock({ milestone, chapterNumber, isFirst, isLast, t, readOnly }: {
+  milestone: MilestoneWithItems
+  /** Rang parmi les seuls chapitres ; null pour un moment du parcours. */
+  chapterNumber: number | null
+  isFirst: boolean
+  isLast: boolean
+  t: Translate
+  readOnly: boolean
+}) {
   const [title, setTitle] = useState(milestone.title)
   const [notes, setNotes] = useState(milestone.notes)
   const [bulkItems, setBulkItems] = useState('')
@@ -110,16 +119,23 @@ function MilestoneBlock({ milestone, index, t, readOnly }: { milestone: Mileston
   }
 
   async function remove() {
-    if (window.confirm(`Supprimer l’étape « ${milestone.title} » et ses sous-activités ?`)) {
+    if (window.confirm(`${t('deleteMilestoneConfirm')} « ${milestone.title} »`)) {
       await deleteMilestone(milestone.id!)
     }
+  }
+
+  async function insertAfter() {
+    const proposed = window.prompt(t('insertAfterPrompt'))
+    if (proposed?.trim()) await insertMilestone(milestone.id!, proposed, 'chapter')
   }
 
   return (
     <article className={`milestone-block ${progress === 100 ? 'milestone-complete' : ''}`}>
       <header className="milestone-block-header">
-        <span className="milestone-status" aria-hidden="true">
-          {progress === 100 ? <CheckCircle2 size={19} /> : index + 1}
+        <span className={`milestone-status ${milestone.kind === 'moment' ? 'milestone-moment' : ''}`} aria-hidden="true">
+          {progress === 100
+            ? <CheckCircle2 size={19} />
+            : milestone.kind === 'moment' ? <Flag size={14} /> : chapterNumber}
         </span>
         <div className="milestone-identity">
           <input
@@ -144,9 +160,20 @@ function MilestoneBlock({ milestone, index, t, readOnly }: { milestone: Mileston
           <strong>{progress}%</strong>
           <span>{completed}/{milestone.subactivities.length}</span>
         </div>
-        <button aria-label={`Supprimer ${milestone.title}`} className="delete-button" disabled={readOnly} onClick={() => void remove()} title="Supprimer l’étape">
-          <Trash2 size={16} />
-        </button>
+        <div className="milestone-controls">
+          <button aria-label={t('moveUp')} className="action-button" disabled={readOnly || isFirst} onClick={() => void moveMilestone(milestone.id!, -1)} title={t('moveUp')}>
+            <ArrowUp size={16} />
+          </button>
+          <button aria-label={t('moveDown')} className="action-button" disabled={readOnly || isLast} onClick={() => void moveMilestone(milestone.id!, 1)} title={t('moveDown')}>
+            <ArrowDown size={16} />
+          </button>
+          <button aria-label={t('insertAfter')} className="action-button" disabled={readOnly} onClick={() => void insertAfter()} title={t('insertAfter')}>
+            <CornerDownRight size={16} />
+          </button>
+          <button aria-label={t('delete')} className="delete-button" disabled={readOnly} onClick={() => void remove()} title={t('delete')}>
+            <Trash2 size={16} />
+          </button>
+        </div>
       </header>
 
       <div className="milestone-progress-track" aria-label={`${progress} % terminé`}>
@@ -195,6 +222,20 @@ export default function MilestonesPage({ language: _language, t, readOnly }: { l
   const overall = allItems.length ? Math.round((completedItems / allItems.length) * 100) : 0
   const completedMilestones = milestones.filter((item) => progressOf(item.subactivities) === 100).length
 
+  // La numérotation ne compte que les chapitres : insérer une approbation
+  // éthique entre deux chapitres ne doit pas décaler leur numéro.
+  const chapterNumbers = useMemo(() => {
+    const numbers = new Map<number, number>()
+    let rank = 0
+    for (const milestone of milestones) {
+      if (milestone.kind !== 'moment') {
+        rank += 1
+        numbers.set(milestone.id!, rank)
+      }
+    }
+    return numbers
+  }, [milestones])
+
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!title.trim()) return
@@ -234,7 +275,17 @@ export default function MilestonesPage({ language: _language, t, readOnly }: { l
       </form>
 
       <section aria-label="Calendrier de la thèse" className="milestone-list">
-        {milestones.map((milestone, index) => <MilestoneBlock index={index} key={milestone.id} milestone={milestone} readOnly={readOnly} t={t} />)}
+        {milestones.map((milestone, index) => (
+          <MilestoneBlock
+            chapterNumber={chapterNumbers.get(milestone.id!) ?? null}
+            isFirst={index === 0}
+            isLast={index === milestones.length - 1}
+            key={milestone.id}
+            milestone={milestone}
+            readOnly={readOnly}
+            t={t}
+          />
+        ))}
       </section>
     </main>
   )

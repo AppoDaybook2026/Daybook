@@ -2,7 +2,7 @@ export type Language = 'en' | 'fr' | 'ar'
 
 const messages = {
   fr: {
-    daily: 'Quotidien', milestones: 'Jalons', deadlines: 'Échéances', today: 'Aujourd’hui',
+    daily: 'Liste de tâches', milestones: 'Jalons de la thèse', deadlines: 'Exigences du CEDoc', today: 'Aujourd’hui',
     newTask: 'Qu’est-ce qui mérite votre attention ?', addTask: 'Ajouter la tâche', done: 'terminées',
     running: 'En cours', clearDay: 'Votre journée est libre. Ajoutez ce qui compte.',
     high: 'Haute', medium: 'Normale', low: 'Basse', notes: 'Notes', taskNotes: 'Notes de travail pour cette tâche…',
@@ -61,9 +61,15 @@ const messages = {
     showDetails: 'Voir le détail', hideDetails: 'Masquer le détail',
     matchingEvents: 'événements affichés', activeCount: 'à traiter',
     addEventTitle: 'Ajouter ou modifier un événement', unsetLabel: '—',
+
+    // --- Réorganisation du plan de thèse (v10) ---
+    insertAfter: 'Insérer un chapitre en dessous', insertAfterPrompt: 'Titre du nouveau chapitre :',
+    deleteMilestoneConfirm: 'Supprimer cette étape et toutes ses sections ?',
+    chapterLabel: 'Chapitre', momentLabel: 'Étape du parcours',
+    colorLabel: 'Couleur', languageLabel: 'Langue', accountLabel: 'Compte',
   },
   en: {
-    daily: 'Daily', milestones: 'Milestones', deadlines: 'Deadlines', today: 'Today',
+    daily: 'To-do list', milestones: 'Thesis milestones', deadlines: 'CEDoc requirements', today: 'Today',
     newTask: 'What deserves your attention?', addTask: 'Add task', done: 'completed', running: 'In progress',
     clearDay: 'Your day is clear. Add what matters.', high: 'High', medium: 'Normal', low: 'Low', notes: 'Notes',
     taskNotes: 'Working notes for this task…', edit: 'Edit', moveUp: 'Move up', moveDown: 'Move down',
@@ -121,9 +127,15 @@ const messages = {
     showDetails: 'Show details', hideDetails: 'Hide details',
     matchingEvents: 'events shown', activeCount: 'to handle',
     addEventTitle: 'Add or edit an event', unsetLabel: '—',
+
+    // --- Thesis outline reordering (v10) ---
+    insertAfter: 'Insert a chapter below', insertAfterPrompt: 'Title of the new chapter:',
+    deleteMilestoneConfirm: 'Delete this step and all its sections?',
+    chapterLabel: 'Chapter', momentLabel: 'Programme step',
+    colorLabel: 'Color', languageLabel: 'Language', accountLabel: 'Account',
   },
   ar: {
-    daily: 'اليومي', milestones: 'المراحل', deadlines: 'المواعيد', today: 'اليوم',
+    daily: 'قائمة المهام', milestones: 'مراحل الأطروحة', deadlines: 'متطلبات CEDoc', today: 'اليوم',
     newTask: 'ما الذي يستحق اهتمامك؟', addTask: 'إضافة المهمة', done: 'مكتملة', running: 'قيد التنفيذ',
     clearDay: 'يومك خالٍ. أضف ما يهمك.', high: 'عالية', medium: 'عادية', low: 'منخفضة', notes: 'ملاحظات',
     taskNotes: 'ملاحظات العمل الخاصة بهذه المهمة…', edit: 'تعديل', moveUp: 'نقل لأعلى', moveDown: 'نقل لأسفل',
@@ -181,6 +193,12 @@ const messages = {
     showDetails: 'عرض التفاصيل', hideDetails: 'إخفاء التفاصيل',
     matchingEvents: 'حدثا معروضا', activeCount: 'قيد المعالجة',
     addEventTitle: 'إضافة حدث أو تعديله', unsetLabel: '—',
+
+    // --- إعادة ترتيب خطة الأطروحة (v10) ---
+    insertAfter: 'إدراج فصل أدناه', insertAfterPrompt: 'عنوان الفصل الجديد:',
+    deleteMilestoneConfirm: 'حذف هذه المرحلة وكل أقسامها؟',
+    chapterLabel: 'فصل', momentLabel: 'مرحلة من المسار',
+    colorLabel: 'اللون', languageLabel: 'اللغة', accountLabel: 'الحساب',
   },
 } as const
 
