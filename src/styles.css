@@ -648,3 +648,25 @@ h1 { margin: 0; color: #2c2c2a; font-size: clamp(27px, 5vw, 38px); font-weight: 
   .milestone-controls { grid-area: 2 / 3; }
   .control-field > span { font-size: 10px; }
 }
+
+/* --- Bouton de compte : visage permanent, état en pastille --------
+   L'icône ne doit jamais changer de nature : c'est elle qui rend le
+   bouton reconnaissable. L'état de synchronisation se lit à côté. */
+
+.account-button { position: relative; overflow: visible; }
+.account-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid white;
+  border-radius: 50%;
+  place-items: center;
+}
+[dir="rtl"] .account-badge { right: auto; left: -3px; }
+.badge-ready { background: var(--accent); color: white; }
+.badge-locked { background: #854f0b; color: white; }
+.badge-offline { background: #888780; color: white; }
+.badge-syncing { background: var(--accent-dark); color: white; }

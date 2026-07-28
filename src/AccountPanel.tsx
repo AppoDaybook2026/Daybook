@@ -72,20 +72,24 @@ export default function AccountControl({ t }: { t: Translate }) {
 
   if (!supabase) return null
 
-  const statusIcon = !session
-    ? <CircleUserRound size={19} />
+  // Le visage reste toujours visible : c'est lui qui rend le bouton
+  // identifiable comme « mon compte ». L'état de synchronisation se lit sur
+  // une pastille d'angle, sans jamais remplacer l'icône.
+  const statusBadge = !session
+    ? null
     : !unlocked
-      ? <Lock size={16} />
+      ? <span className="account-badge badge-locked"><Lock size={10} /></span>
       : phase === 'offline'
-        ? <CloudOff size={16} />
+        ? <span className="account-badge badge-offline"><CloudOff size={10} /></span>
         : phase === 'syncing'
-          ? <RefreshCw size={16} className="spin" />
-          : <ShieldCheck size={16} />
+          ? <span className="account-badge badge-syncing"><RefreshCw size={10} className="spin" /></span>
+          : <span className="account-badge badge-ready"><ShieldCheck size={10} /></span>
 
   return (
     <>
       <button aria-label={t('account')} className={`account-button ${session ? 'account-signed-in' : ''}`} onClick={() => setOpen(true)} title={t('account')}>
-        {statusIcon}
+        <CircleUserRound size={21} />
+        {statusBadge}
       </button>
       {open && (
         <AccountModal

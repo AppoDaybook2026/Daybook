@@ -248,8 +248,7 @@ export default function MilestonesPage({ language: _language, t, readOnly }: { l
     <main className="main-content milestones-page">
       <div className="milestones-heading">
         <div>
-          <p className="eyebrow">{t('dissertation')}</p>
-          <h1>{t('thesisPlan')}</h1>
+          <h1>{t('milestones')}</h1>
           <p className="heading-subtitle">{completedMilestones} {t('stages')} {milestones.length}</p>
         </div>
         <div className="overall-progress" aria-label={`Progression générale ${overall} %`}>
