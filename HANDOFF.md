@@ -32,8 +32,8 @@ Toute la navigation est en mémoire : aucune route côté URL, donc pas besoin
 de repli SPA côté serveur.
 
 **Serveur** — Cloudflare Pages Functions dans `functions/api/`, logique
-partagée dans `shared/extract.ts`. Deux routes : `/api/extract-event` et
-`/api/health`.
+partagée dans `shared/extract.ts`. Trois routes : `/api/extract-event`,
+`/api/draft-report` et `/api/health`.
 
 **Chiffrement** — deux couches distinctes, à ne pas confondre :
 - `localCrypto.ts` chiffre les champs libres au repos dans IndexedDB, avec une
@@ -62,9 +62,10 @@ affiché est composé par le service worker, dans la langue de l'utilisateur.
   connexion et déverrouillage du coffre.
 - **Rappels serveur** — chaîne complète cron → fonction Edge → navigateur,
   après correction de l'URL du cron.
-- **Suite automatisée** — 17 tests (`npm test`) : chiffrement, phrases de
+- **Suite automatisée** — 36 tests (`npm test`) : chiffrement, phrases de
   récupération, outbox, report des tâches, sauvegardes chiffrées, suivi v9,
-  réorganisation du plan de thèse, collecte et export du rapport.
+  réorganisation du plan de thèse, collecte et export du rapport dans les
+  trois langues.
 
 ## Variables d'environnement
 
@@ -115,6 +116,12 @@ Quatrième onglet : rapport d'avancement de thèse sur une période choisie.
 `report.ts` rassemble les données localement, `reportDocx.ts` produit le Word,
 `functions/api/draft-report.ts` fait rédiger les huit sections par Gemini.
 
+Le document suit la **langue de l'interface** : titres de sections, sommaire,
+page de garde, tableaux et instruction de rédaction au modèle. L'arabe règle
+son sens de lecture paragraphe par paragraphe — la bibliothèque `docx` ne le
+permet pas au niveau de la section, contrairement à ce que sa documentation
+laisse croire.
+
 Page de garde et brouillon vivent dans `appMeta`, chiffrés localement et
 synchronisés comme le reste — aucune migration de schéma n'a été nécessaire.
 
@@ -136,7 +143,7 @@ correspondante de `PRIVACY.md` doivent rester exacts si ce code change.
 ```bash
 npm install
 npm run dev            # développement local
-npm test               # 34 tests
+npm test               # 36 tests
 npm run build          # tsc + vite + service worker
 npm run test:rls       # isolation entre comptes (variables d'env requises)
 ```
