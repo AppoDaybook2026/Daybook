@@ -320,7 +320,7 @@ export default function App() {
       {page === 'daily' && <DailyPage language={language} readOnly={demoMode} t={t} />}
       {page === 'milestones' && <MilestonesPage language={language} readOnly={demoMode} t={t} />}
       {page === 'deadlines' && <DeadlinesPage t={t} />}
-      {page === 'report' && <ReportPage t={t} />}
+      {page === 'report' && <ReportPage language={language} t={t} />}
     </div>
   )
 }

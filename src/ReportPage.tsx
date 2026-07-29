@@ -1,6 +1,6 @@
 import { AlertTriangle, Download, FileText, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import type { MessageKey, Translate } from './i18n'
+import type { Language, MessageKey, Translate } from './i18n'
 import {
   EMPTY_COVER, EMPTY_SECTIONS, gatherReportData, loadCover, loadDraft, REPORT_SECTIONS,
   saveCover, saveDraft, summariseForDrafting,
@@ -18,20 +18,20 @@ const SECTION_LABELS: Record<ReportSectionKey, MessageKey> = {
   publications: 'sectionPublications',
 }
 
-const COVER_FIELDS: { key: keyof ReportCover; label: string; wide?: boolean }[] = [
-  { key: 'institution', label: 'University', wide: true },
-  { key: 'school', label: 'Graduate school', wide: true },
-  { key: 'reportNumber', label: 'Report number (e.g. 3rd REPORT)' },
-  { key: 'periodLabel', label: 'Period and year (e.g. JANUARY/JUNE 2027)' },
-  { key: 'thesisTitle', label: 'Thesis title', wide: true },
-  { key: 'advisor', label: 'Thesis advisor' },
-  { key: 'advisorInstitution', label: 'Advisor institution' },
-  { key: 'coAdvisor', label: 'Co-advisor (if any)' },
-  { key: 'coAdvisorInstitution', label: 'Co-advisor institution' },
-  { key: 'studentName', label: 'Student name' },
-  { key: 'studentId', label: 'Student ID number' },
-  { key: 'department', label: 'Department' },
-  { key: 'programme', label: 'Programme' },
+const COVER_FIELDS: { key: keyof ReportCover; label: MessageKey; wide?: boolean }[] = [
+  { key: 'institution', label: 'coverInstitution', wide: true },
+  { key: 'school', label: 'coverSchool', wide: true },
+  { key: 'reportNumber', label: 'coverReportNumber' },
+  { key: 'periodLabel', label: 'coverPeriodLabel' },
+  { key: 'thesisTitle', label: 'coverThesisTitle', wide: true },
+  { key: 'advisor', label: 'coverAdvisor' },
+  { key: 'advisorInstitution', label: 'coverAdvisorInstitution' },
+  { key: 'coAdvisor', label: 'coverCoAdvisor' },
+  { key: 'coAdvisorInstitution', label: 'coverCoAdvisorInstitution' },
+  { key: 'studentName', label: 'coverStudentName' },
+  { key: 'studentId', label: 'coverStudentId' },
+  { key: 'department', label: 'coverDepartment' },
+  { key: 'programme', label: 'coverProgramme' },
 ]
 
 /** Six mois en arrière, période par défaut d'un rapport d'avancement. */
@@ -42,7 +42,7 @@ function defaultPeriod() {
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
 }
 
-export default function ReportPage({ t }: { t: Translate }) {
+export default function ReportPage({ t, language }: { t: Translate; language: Language }) {
   const [period, setPeriod] = useState(defaultPeriod)
   const [data, setData] = useState<ReportData | null>(null)
   const [cover, setCover] = useState<ReportCover>(EMPTY_COVER)
@@ -97,7 +97,7 @@ export default function ReportPage({ t }: { t: Translate }) {
       const response = await fetch('/api/draft-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary: summariseForDrafting(data) }),
+        body: JSON.stringify({ summary: summariseForDrafting(data), language }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? `http-${response.status}`)
@@ -125,11 +125,11 @@ export default function ReportPage({ t }: { t: Translate }) {
   async function exportDocx() {
     if (!data) return
     const { buildReportDocx } = await import('./reportDocx')
-    const blob = await buildReportDocx(cover, sections, data)
+    const blob = await buildReportDocx(cover, sections, data, t, language === 'ar')
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `thesis-progress-report-${period.start}-${period.end}.docx`
+    link.download = `thesis-progress-report-${period.start}-${period.end}-${language}.docx`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -176,12 +176,12 @@ export default function ReportPage({ t }: { t: Translate }) {
         <div className="event-form-grid">
           {COVER_FIELDS.map((field) => (
             <label className={field.wide ? 'span-2' : ''} key={field.key}>
-              <span>{field.label}</span>
+              <span>{t(field.label)}</span>
               <input onChange={(event) => updateCover(field.key, event.target.value)} value={cover[field.key]} />
             </label>
           ))}
           <label className="span-2">
-            <span>Steering committee members (one per line)</span>
+            <span>{t('coverCommittee')}</span>
             <textarea onChange={(event) => updateCover('committee', event.target.value)} rows={3} value={cover.committee} />
           </label>
         </div>

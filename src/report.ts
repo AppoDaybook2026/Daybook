@@ -185,8 +185,10 @@ export interface ReportCover {
 }
 
 export const EMPTY_COVER: ReportCover = {
-  institution: 'ISTANBUL TECHNICAL UNIVERSITY',
-  school: 'GRADUATE SCHOOL OF ARTS AND SOCIAL SCIENCES',
+  // Rien n'est pré-rempli : l'établissement varie d'un utilisateur à l'autre,
+  // et une valeur héritée d'un autre serait pire qu'un champ vide.
+  institution: '',
+  school: '',
   reportNumber: '',
   periodLabel: '',
   thesisTitle: '',

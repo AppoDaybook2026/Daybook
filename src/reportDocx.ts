@@ -10,17 +10,18 @@ import {
   AlignmentType, Document, HeadingLevel, PageBreak, Packer, Paragraph,
   Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx'
+import type { MessageKey, Translate } from './i18n'
 import type { ReportCover, ReportData, ReportSectionKey, ReportSections } from './report'
 
-const SECTION_TITLES: Record<ReportSectionKey, string> = {
-  introduction: '1. INTRODUCTION',
-  timePlan: '2. TIME PLAN PRESENTED IN THESIS PROPOSAL',
-  contribution: '3. CONTRIBUTION OF THE STUDIES CONDUCTED DURING THE LAST SIX MONTHS WITHIN THE WHOLE THESIS STUDY',
-  conducted: '4. EXPLANATION OF THE STUDIES CONDUCTED DURING THE LAST SIX MONTHS IN ACCORDANCE WITH THE TIME PLAN AND THEIR RESULTS',
-  notConducted: '5. STUDIES DURING THE LAST SIX MONTHS INCLUDED IN TIME PLAN BUT NOT CONDUCTED AND REASONS (if any)',
-  methodologyChanges: '6. CHANGES IN THE METHODOLOGY AND THEIR REASONS (if any)',
-  nextSixMonths: '7. EXPLANATION OF THE STUDIES PLANNED FOR THE NEXT SIX MONTHS',
-  publications: '8. PUBLICATIONS ABOUT THE THESIS SUBJECT BEING PREPARED AND/OR SUBMITTED',
+const SECTION_KEYS: Record<ReportSectionKey, MessageKey> = {
+  introduction: 'docSec1',
+  timePlan: 'docSec2',
+  contribution: 'docSec3',
+  conducted: 'docSec4',
+  notConducted: 'docSec5',
+  methodologyChanges: 'docSec6',
+  nextSixMonths: 'docSec7',
+  publications: 'docSec8',
 }
 
 const ORDER: ReportSectionKey[] = [
@@ -31,22 +32,32 @@ const ORDER: ReportSectionKey[] = [
 /** Emplacement à compléter, visible dans le document exporté. */
 const placeholder = (label: string) => `[${label}]`
 
+/**
+ * Sens de lecture du document en cours de génération. La bibliothèque règle
+ * cela paragraphe par paragraphe, pas au niveau de la section ; un drapeau de
+ * module suffit puisqu'un navigateur n'exporte qu'un document à la fois.
+ */
+let rightToLeftDocument = false
+
 const centered = (text: string, bold = false, size = 22) => new Paragraph({
   alignment: AlignmentType.CENTER,
+  bidirectional: rightToLeftDocument,
   spacing: { after: 120 },
-  children: [new TextRun({ text, bold, size })],
+  children: [new TextRun({ text, bold, size, rightToLeft: rightToLeftDocument })],
 })
 
 const body = (text: string) => new Paragraph({
+  bidirectional: rightToLeftDocument,
   spacing: { after: 120, line: 276 },
-  children: [new TextRun({ text, size: 22 })],
+  children: [new TextRun({ text, size: 22, rightToLeft: rightToLeftDocument })],
 })
 
 function heading(text: string) {
   return new Paragraph({
     heading: HeadingLevel.HEADING_2,
+    bidirectional: rightToLeftDocument,
     spacing: { before: 240, after: 120 },
-    children: [new TextRun({ text, bold: true, size: 22 })],
+    children: [new TextRun({ text, bold: true, size: 22, rightToLeft: rightToLeftDocument })],
   })
 }
 
@@ -54,7 +65,10 @@ function cell(text: string, bold = false, width?: number) {
   return new TableCell({
     width: width ? { size: width, type: WidthType.PERCENTAGE } : undefined,
     margins: { top: 60, bottom: 60, left: 100, right: 100 },
-    children: [new Paragraph({ children: [new TextRun({ text, bold, size: 20 })] })],
+    children: [new Paragraph({
+      bidirectional: rightToLeftDocument,
+      children: [new TextRun({ text, bold, size: 20, rightToLeft: rightToLeftDocument })],
+    })],
   })
 }
 
@@ -75,65 +89,65 @@ function table(headers: string[], rows: string[][], widths: number[]) {
 
 /* ------------------------------------------------------------------ */
 
-function coverPage(cover: ReportCover): Paragraph[] {
-  const value = (text: string, label: string) => text.trim() || placeholder(label)
+function coverPage(cover: ReportCover, t: Translate): Paragraph[] {
+  const value = (text: string, key: MessageKey) => text.trim() || placeholder(t(key))
 
   const committee = cover.committee.trim()
     ? cover.committee.split('\n').filter(Boolean)
-    : [placeholder('Prof. Dr. Name SURNAME — University/Institution')]
+    : [placeholder(`${t('docPhName')} — ${t('docPhInstitution')}`)]
 
   return [
-    centered(cover.institution || placeholder('UNIVERSITY'), true, 26),
-    centered(cover.school || placeholder('GRADUATE SCHOOL'), true, 24),
+    centered(value(cover.institution, 'docPhUniversity'), true, 26),
+    centered(value(cover.school, 'docPhSchool'), true, 24),
     new Paragraph({ text: '', spacing: { after: 240 } }),
-    centered(value(cover.reportNumber, 'REPORT NUMBER, e.g. 3rd REPORT'), true, 24),
-    centered(value(cover.periodLabel, 'PERIOD AND YEAR, e.g. JANUARY/JUNE 2027'), true, 24),
+    centered(value(cover.reportNumber, 'docPhReportNumber'), true, 24),
+    centered(value(cover.periodLabel, 'docPhPeriod'), true, 24),
     new Paragraph({ text: '', spacing: { after: 360 } }),
-    centered(value(cover.thesisTitle, 'THESIS TITLE'), true, 26),
+    centered(value(cover.thesisTitle, 'docPhThesisTitle'), true, 26),
     new Paragraph({ text: '', spacing: { after: 360 } }),
 
-    body(`Thesis Advisor: ${value(cover.advisor, 'Prof. Dr. Name SURNAME')}`),
-    body(`                ${value(cover.advisorInstitution, 'University/Institution')}`),
-    body(`Co-Advisor (if any): ${value(cover.coAdvisor, 'Prof. Dr. Name SURNAME')}`),
-    body(`                     ${value(cover.coAdvisorInstitution, 'University/Institution')}`),
+    body(`${t('docAdvisor')} : ${value(cover.advisor, 'docPhName')}`),
+    body(`    ${value(cover.advisorInstitution, 'docPhInstitution')}`),
+    body(`${t('docCoAdvisor')} : ${value(cover.coAdvisor, 'docPhName')}`),
+    body(`    ${value(cover.coAdvisorInstitution, 'docPhInstitution')}`),
     new Paragraph({ text: '', spacing: { after: 120 } }),
-    body('Steering Committee Members:'),
+    body(t('docCommittee')),
     ...committee.map((member) => body(`    ${member}`)),
     new Paragraph({ text: '', spacing: { after: 240 } }),
 
-    body(`Student: ${value(cover.studentName, 'Name SURNAME')}`),
-    body(`Student ID Number: ${value(cover.studentId, 'Student ID')}`),
-    body(`Department: ${value(cover.department, 'Department')}`),
-    body(`Programme: ${value(cover.programme, 'Programme')}`),
+    body(`${t('docStudent')} : ${value(cover.studentName, 'docPhName')}`),
+    body(`${t('docStudentId')} : ${value(cover.studentId, 'docPhStudentId')}`),
+    body(`${t('docDepartment')} : ${value(cover.department, 'docPhDepartment')}`),
+    body(`${t('docProgramme')} : ${value(cover.programme, 'docPhProgramme')}`),
     new Paragraph({ text: '', spacing: { after: 360 } }),
-    centered('THESIS PROGRESS REPORT', true, 28),
+    centered(t('docReportTitle'), true, 28),
     new Paragraph({ children: [new PageBreak()] }),
   ]
 }
 
-function contentsPage(): Paragraph[] {
+function contentsPage(t: Translate): Paragraph[] {
   return [
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
       spacing: { after: 240 },
-      children: [new TextRun({ text: 'CONTENTS', bold: true, size: 24 })],
+      children: [new TextRun({ text: t('docContents'), bold: true, size: 24 })],
     }),
     ...ORDER.map((key) => new Paragraph({
       spacing: { after: 80 },
-      children: [new TextRun({ text: SECTION_TITLES[key], size: 20 })],
+      children: [new TextRun({ text: t(SECTION_KEYS[key]), size: 20 })],
     })),
     new Paragraph({ children: [new PageBreak()] }),
   ]
 }
 
 /** Tableaux de synthèse insérés en section 4, là où ils font sens. */
-function evidenceTables(data: ReportData) {
+function evidenceTables(data: ReportData, t: Translate) {
   const blocks: (Paragraph | Table)[] = []
 
   if (data.tasks.length) {
-    blocks.push(heading('Table 1 — Work completed during the period'))
+    blocks.push(heading(t('docTable1')))
     blocks.push(table(
-      ['Date', 'Activity', 'Time (min)', 'Notes'],
+      [t('docColDate'), t('docColActivity'), t('docColTime'), t('docColNotes')],
       data.tasks.slice(0, 40).map((task) => [
         task.completedOn,
         task.text,
@@ -146,12 +160,12 @@ function evidenceTables(data: ReportData) {
 
   const advanced = data.chapters.filter((chapter) => chapter.doneSections > 0)
   if (advanced.length) {
-    blocks.push(heading('Table 2 — Thesis outline progress'))
+    blocks.push(heading(t('docTable2')))
     blocks.push(table(
-      ['Chapter or step', 'Type', 'Sections done', 'Progress'],
+      [t('docColChapter'), t('docColType'), t('docColSections'), t('docColProgress')],
       advanced.map((chapter) => [
         chapter.title,
-        chapter.kind === 'moment' ? 'Programme step' : 'Chapter',
+        chapter.kind === 'moment' ? t('docProgrammeStep') : t('docChapter'),
         `${chapter.doneSections}/${chapter.totalSections}`,
         `${chapter.progress}%`,
       ]),
@@ -160,9 +174,9 @@ function evidenceTables(data: ReportData) {
   }
 
   if (data.requirementsInPeriod.length) {
-    blocks.push(heading('Table 3 — Doctoral school requirements in this period'))
+    blocks.push(heading(t('docTable3')))
     blocks.push(table(
-      ['Item', 'Category', 'Deadline', 'Status'],
+      [t('docColItem'), t('docColCategory'), t('docColDeadline'), t('docColStatus')],
       data.requirementsInPeriod.map((item) => [
         item.name, item.category, item.deadline || '—', item.status,
       ]),
@@ -179,29 +193,33 @@ export async function buildReportDocx(
   cover: ReportCover,
   sections: ReportSections,
   data: ReportData,
+  t: Translate,
+  rightToLeft = false,
 ): Promise<Blob> {
+  rightToLeftDocument = rightToLeft
+
   const content: (Paragraph | Table)[] = [
-    ...coverPage(cover),
-    ...contentsPage(),
+    ...coverPage(cover, t),
+    ...contentsPage(t),
   ]
 
   for (const key of ORDER) {
-    content.push(heading(SECTION_TITLES[key]))
+    content.push(heading(t(SECTION_KEYS[key])))
     const text = sections[key].trim()
     if (text) {
       for (const paragraph of text.split(/\n{2,}/)) {
         for (const line of paragraph.split('\n')) if (line.trim()) content.push(body(line.trim()))
       }
     } else {
-      content.push(body(placeholder('To be completed')))
+      content.push(body(placeholder(t('docToComplete'))))
     }
     // Les tableaux étayent la section 4, celle qui rend compte du travail fait.
-    if (key === 'conducted') content.push(...evidenceTables(data))
+    if (key === 'conducted') content.push(...evidenceTables(data, t))
   }
 
   const document = new Document({
     creator: 'Daybook',
-    title: cover.thesisTitle || 'Thesis progress report',
+    title: cover.thesisTitle || t('docReportTitle'),
     styles: { default: { document: { run: { font: 'Times New Roman', size: 22 } } } },
     sections: [{
       properties: { page: { margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },

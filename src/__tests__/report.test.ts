@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addDeadline, addMilestone, addSubactivities, addTask, db, setSubactivityCompleted, setTaskCompleted } from '../db'
+import { translator } from '../i18n'
 import {
   EMPTY_COVER, gatherReportData, loadCover, loadDraft, saveCover, saveDraft,
   summariseForDrafting, EMPTY_SECTIONS,
@@ -120,6 +121,7 @@ describe('export Word', () => {
       { ...EMPTY_COVER, studentName: 'Nom Prenom', thesisTitle: 'Titre de these' },
       { ...EMPTY_SECTIONS, introduction: 'This report covers the period.' },
       data,
+      translator('en'),
     )
 
     expect(blob.size).toBeGreaterThan(3000)
@@ -138,5 +140,31 @@ describe('export Word', () => {
       Object.keys(EMPTY_SECTIONS).map((key) => [key, 'x'.repeat(4000)]),
     ) as typeof EMPTY_SECTIONS
     expect(estimatePages(verbose, data)).toBeGreaterThan(5)
+  })
+})
+
+describe('rapport multilingue', () => {
+  beforeEach(reset)
+
+  it('produit le document dans chacune des trois langues', async () => {
+    const { buildReportDocx } = await import('../reportDocx')
+    const data = await gatherReportData({ start: '2027-01-01', end: '2027-12-31' })
+
+    for (const language of ['en', 'fr', 'ar'] as const) {
+      const blob = await buildReportDocx(EMPTY_COVER, EMPTY_SECTIONS, data, translator(language), language === 'ar')
+      expect(blob.size).toBeGreaterThan(3000)
+    }
+  })
+
+  it('les titres de sections diffèrent bien selon la langue', () => {
+    expect(translator('en')('docSec1')).toBe('1. INTRODUCTION')
+    expect(translator('fr')('docSec2')).toContain('CALENDRIER')
+    expect(translator('ar')('docSec8')).toContain('المنشورات')
+    // Les huit sections existent dans les trois langues.
+    for (const language of ['en', 'fr', 'ar'] as const) {
+      for (const index of [1, 2, 3, 4, 5, 6, 7, 8]) {
+        expect(translator(language)(`docSec${index}` as never).length).toBeGreaterThan(5)
+      }
+    }
   })
 })
