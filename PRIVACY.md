@@ -20,6 +20,28 @@
 - L'administrateur du service, l'hébergeur et le concepteur de l'application
   ne peuvent pas lire vos contenus, ni réinitialiser votre phrase de coffre.
 
+## La seule exception : la rédaction assistée du rapport
+
+Il existe un endroit, et un seul, où votre contenu sort du chiffrement de bout
+en bout : le bouton **« Rédiger avec l'IA »** de la rubrique Rapport.
+
+Si vous l'utilisez, sont envoyés à Google Gemini, en clair :
+
+- les intitulés des tâches que vous avez accomplies sur la période choisie ;
+- vos notes de travail attachées à ces tâches ;
+- les titres de vos chapitres et l'état de leur avancement ;
+- la liste de vos exigences et candidatures, avec leur statut.
+
+Ne sont **jamais** envoyés : votre identité, votre page de garde, le titre de
+votre thèse, le nom de vos encadrants, votre numéro d'étudiant, ni aucune
+donnée hors de la période choisie.
+
+L'application vous avertit explicitement avant chaque envoi, et vous pouvez
+refuser : les huit sections restent alors entièrement rédigeables à la main,
+et l'export Word fonctionne à l'identique. Tout le reste de l'application —
+tâches, jalons, échéances, sauvegardes, synchronisation — demeure chiffré de
+bout en bout, sans exception.
+
 ## Récupération
 
 - Nouvel appareil : connexion + phrase de coffre (ou phrase de 12 mots).

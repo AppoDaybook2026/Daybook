@@ -63,7 +63,8 @@ affiché est composé par le service worker, dans la langue de l'utilisateur.
 - **Rappels serveur** — chaîne complète cron → fonction Edge → navigateur,
   après correction de l'URL du cron.
 - **Suite automatisée** — 17 tests (`npm test`) : chiffrement, phrases de
-  récupération, outbox, report des tâches, sauvegardes chiffrées, suivi v9.
+  récupération, outbox, report des tâches, sauvegardes chiffrées, suivi v9,
+  réorganisation du plan de thèse, collecte et export du rapport.
 
 ## Variables d'environnement
 
@@ -108,6 +109,19 @@ redémarrage. Sans quoi : `Registration failed - push service error`.
 évités en lisant la feuille de styles ou le bundle réellement servis. Attention
 au cache : ajouter `?v=1` à l'URL pour contourner.
 
+## Rubrique Rapport (v11)
+
+Quatrième onglet : rapport d'avancement de thèse sur une période choisie.
+`report.ts` rassemble les données localement, `reportDocx.ts` produit le Word,
+`functions/api/draft-report.ts` fait rédiger les huit sections par Gemini.
+
+Page de garde et brouillon vivent dans `appMeta`, chiffrés localement et
+synchronisés comme le reste — aucune migration de schéma n'a été nécessaire.
+
+**Attention** : c'est le seul endroit où le contenu de l'utilisateur quitte le
+chiffrement de bout en bout. L'avertissement affiché avant envoi et la section
+correspondante de `PRIVACY.md` doivent rester exacts si ce code change.
+
 ## Ce qui reste
 
 - Message d'aide pour les utilisateurs de Brave, en trois langues.
@@ -122,7 +136,7 @@ au cache : ajouter `?v=1` à l'URL pour contourner.
 ```bash
 npm install
 npm run dev            # développement local
-npm test               # 17 tests
+npm test               # 34 tests
 npm run build          # tsc + vite + service worker
 npm run test:rls       # isolation entre comptes (variables d'env requises)
 ```

@@ -134,7 +134,7 @@ async function fetchPageText(target: URL): Promise<string> {
 
 // Les noms de modèles évoluent ; on essaie du plus récent au plus ancien et
 // on passe au suivant si l'API répond 404 (modèle inconnu).
-const GEMINI_MODELS = [
+export const GEMINI_MODELS = [
   'gemini-3.5-flash',
   'gemini-2.5-flash',
   'gemini-2.0-flash',
@@ -176,7 +176,7 @@ Page text:
  * Interactions API (output_text ou steps[].modelOutput) ou l'ancienne
  * generateContent (candidates[].content.parts).
  */
-function readModelText(data: unknown): string {
+export function readModelText(data: unknown): string {
   const root = data as {
     output_text?: string
     outputText?: string
@@ -204,7 +204,7 @@ function readModelText(data: unknown): string {
   return pieces.join('\n')
 }
 
-async function askModel(apiKey: string, model: string, prompt: string): Promise<Response | null> {
+export async function askModel(apiKey: string, model: string, prompt: string): Promise<Response | null> {
   const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }
 
   // Point d'entrée actuel : Interactions API.

@@ -670,3 +670,42 @@ h1 { margin: 0; color: #2c2c2a; font-size: clamp(27px, 5vw, 38px); font-weight: 
 .badge-locked { background: #854f0b; color: white; }
 .badge-offline { background: #888780; color: white; }
 .badge-syncing { background: var(--accent-dark); color: white; }
+
+/* --- Rapport d'avancement ---------------------------------------- */
+
+.report-page { width: min(100% - 48px, 1040px); }
+.report-date { display: grid; gap: 3px; }
+.report-date > span { color: #888780; font-size: 12px; font-weight: 650; }
+.report-date input { height: 36px; padding: 0 9px; border: 1px solid #dbd9d1; border-radius: 5px; background: white; color: #444441; font-size: 14px; }
+
+.report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.report-summary > div { padding: 14px 16px; border: 1px solid #e2e0d9; border-radius: 8px; background: white; }
+.report-summary strong { display: block; color: var(--accent-dark); font-size: 24px; font-weight: 650; line-height: 1; }
+.report-summary span { display: block; margin-top: 5px; color: #888780; font-size: 13px; }
+
+.report-block { margin-bottom: 20px; padding: 20px; border: 1px solid #e2e0d9; border-radius: 8px; background: white; }
+.report-block h2 { margin: 0 0 6px; color: #33322f; font-size: 17px; font-weight: 700; }
+.report-block-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-block .event-form-grid { margin-top: 14px; }
+.report-block textarea {
+  width: 100%;
+  padding: 9px 11px;
+  resize: vertical;
+  border: 1px solid #dbd9d1;
+  border-radius: 5px;
+  background: white;
+  color: #2c2c2a;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.report-section { display: grid; gap: 5px; margin-top: 14px; }
+.report-section > span { color: #5f5e5a; font-size: 14px; font-weight: 650; }
+.report-pages { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; color: #888780; font-size: 13px; }
+.report-pages-over { color: #a32d2d; font-weight: 650; }

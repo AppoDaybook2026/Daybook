@@ -9,11 +9,12 @@ import {
 import { type TodayTask, useTodayTasks } from './useTodayTasks'
 import MilestonesPage from './MilestonesPage'
 import DeadlinesPage from './DeadlinesPage'
+import ReportPage from './ReportPage'
 import AccountControl from './AccountPanel'
 import { translator, type Language, type Translate } from './i18n'
 import { useDeadlineReminders } from './useDeadlineReminders'
 
-type Page = 'daily' | 'milestones' | 'deadlines'
+type Page = 'daily' | 'milestones' | 'deadlines' | 'report'
 type Theme = 'green' | 'blue' | 'coral' | 'violet'
 const demoMode = import.meta.env.VITE_DEMO === 'true'
 
@@ -290,6 +291,7 @@ export default function App() {
               <button className={`nav-item ${page === 'daily' ? 'nav-item-active' : ''}`} onClick={() => setPage('daily')}>{t('daily')}</button>
               <button className={`nav-item ${page === 'milestones' ? 'nav-item-active' : ''}`} onClick={() => setPage('milestones')}>{t('milestones')}</button>
               <button className={`nav-item ${page === 'deadlines' ? 'nav-item-active' : ''}`} onClick={() => setPage('deadlines')}>{t('deadlines')}</button>
+              <button className={`nav-item ${page === 'report' ? 'nav-item-active' : ''}`} onClick={() => setPage('report')}>{t('report')}</button>
             </nav>
             <div className="preference-controls">
               <label className="control-field">
@@ -318,6 +320,7 @@ export default function App() {
       {page === 'daily' && <DailyPage language={language} readOnly={demoMode} t={t} />}
       {page === 'milestones' && <MilestonesPage language={language} readOnly={demoMode} t={t} />}
       {page === 'deadlines' && <DeadlinesPage t={t} />}
+      {page === 'report' && <ReportPage t={t} />}
     </div>
   )
 }
